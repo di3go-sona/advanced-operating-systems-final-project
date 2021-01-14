@@ -119,3 +119,5 @@ dkms.conf
 .nfs*
 
 # End of https://www.gitignore.io/api/c,linux,autotools
+.vscode/c_cpp_properties.json
+.vscode/settings.json
