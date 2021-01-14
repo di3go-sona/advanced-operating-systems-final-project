@@ -1,0 +1,2 @@
+# chardev device
+DEVPATH=="/module/ipc_module", NAME="%k" 
