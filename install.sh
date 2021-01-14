@@ -1,7 +1,12 @@
 #!/bin/sh
 
 # copying ipcdev rules to the udev rules folder
-#cp ./71-ipcdev.rules /etc/udev/rules.d/
+INSTALL_FOLDER=/etc/ipc_group_dev/
 
-sudo insmod ipc_module.ko
-sudo rmmod ipc_module
+make
+sudo mkdir $INSTALL_FOLDER
+sudo cp -r $PWD/udev_scripts $INSTALL_FOLDER
+sudo cp ./71-ipcdev.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+
+# make clean
