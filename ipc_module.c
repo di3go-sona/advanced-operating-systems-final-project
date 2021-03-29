@@ -3,36 +3,40 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/slab.h> 
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Diego Sonaglia");
 MODULE_DESCRIPTION("An ipc message passing/synching module for the AOSV course @ La sapieza");
 MODULE_VERSION("0.01");
 
 
-#define IPC_DEV_MAJOR 117
-#define IPC_DEV_NAME "group"
+#define IPC_MAX_GROUPS 16
+#define IPC_DEV_NAME "aosv_ipc_dev"
+#define IPC_CLASS_NAME "aosv_ipc_class"
 
+struct class*  	dev_class ;
+struct device*	root_device ;
+struct cdev* 	root_cdev ;
 
-struct class* group_class ;
-struct device* group_dev0;
-int dev_major;
+dev_t devno;
 
 int ipc_group_open(struct inode *inode, struct file *filp) {
-
-    printk("ipc dev open");
+	
+    printk(KERN_INFO "ipc dev open");
 
 	return 0;
 }
 ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff_t *offset) {
 
-    printk("ipc dev read");
+    printk(KERN_INFO "ipc dev read");
 
 	return 0;
 }
 
 int ipc_group_release(struct inode *inode, struct file *filp)
 {
-    printk("ipc dev release");
+    printk(KERN_INFO "ipc dev release");
 
 	return 0;
 }
@@ -46,47 +50,89 @@ struct file_operations ipc_group_ops = {
 
 static int ipc_group_install(void)
 {
-	int err = 0;
-    printk("ipc dev installing");
-	
-	/* Register device major and minor */
-	dev_major = register_chrdev(0, IPC_DEV_NAME, &ipc_group_ops);
-	if (dev_major < 0) {
-		printk(KERN_ERR  "Failed registering char device\n");
-	} else {
-		printk(KERN_INFO "ipc dev installed with major :%d", dev_major);
+	int res;
+    printk(KERN_INFO "ipc dev installing");
 
+	/* Register device major and minor */
+	res = alloc_chrdev_region(&devno, 0, IPC_MAX_GROUPS, IPC_DEV_NAME);
+	if (res < 0) {
+		printk(KERN_ERR  "Failed registering char device\n");
+		goto ALLOC_CHRDEV_REGION_FAIL;
+	} else {
+		printk(KERN_INFO "ipc dev installed with major %d and minor %d", MAJOR(devno), MINOR(devno));
 	}
 
 	/* Create a class : appears at /sys/class */
-    group_class  = class_create(THIS_MODULE, "ipc_group");
-	if (group_class == NULL) {
+    dev_class  = class_create(THIS_MODULE, IPC_CLASS_NAME);
+	if (dev_class == NULL) {
 		printk(KERN_ERR  "Failed creating class\n");
+		goto CLASS_CREATE_FAIL;
 	} else {
 		printk(KERN_INFO "Class creation success");
 	}
 
-	struct device* group_dev0 = device_create(group_class, NULL, MKDEV(dev_major, 0), NULL, IPC_DEV_NAME);
-	if (group_dev0 < 0) {
-		printk(KERN_ERR  "Failed creating device\n");
+	/* Allocate space for cdev */
+	root_cdev = cdev_alloc();
+	if (root_cdev < 0) {
+		printk(KERN_ERR  "Failed allocating space for cdev struct\n");
+		goto CDEV_ALLOC_FAIL;
 	} else {
 		printk(KERN_INFO "Device creation success");
 	}
 
 
-	return err;
+	/*  Registering device to the kernel */
+	cdev_init(root_cdev, &ipc_group_ops);
+	root_cdev -> owner = THIS_MODULE;
+	res = cdev_add(root_cdev, devno, 1);
+	if (res < 0) {
+		printk(KERN_ERR  "Failed making cdev live \n");
+		goto CDEV_ADD_FAIL;
+	} else {
+		printk(KERN_INFO "cdev is now live");
+	}
+
+
+	/*  Creating the device into the pseudo file system */
+	root_device = device_create(dev_class, NULL, devno, NULL, IPC_DEV_NAME);
+	if (root_device < 0) {
+		printk(KERN_ERR  "Failed creating device\n");
+		goto DEVICE_CREATE_FAIL;
+	} else {
+		printk(KERN_INFO "Device creation success");
+	}
+
+	return 0;
+	
+	
+
+// device_destroy(dev_class, root_device);
+
+DEVICE_CREATE_FAIL:
+	cdev_del(root_cdev);
+
+CDEV_ADD_FAIL:
+	
+	kfree(root_cdev);
+
+CDEV_ALLOC_FAIL:
+	class_destroy(dev_class);
+	
+CLASS_CREATE_FAIL:
+	unregister_chrdev_region(devno, IPC_MAX_GROUPS);
+
+ALLOC_CHRDEV_REGION_FAIL:
+	return res;
+
 }
 
 static int   ipc_group_uninstall(void)
 {
-	int err;
-    printk("ipc dev uninstalling");
-
-	device_destroy(group_class,MKDEV(dev_major, 0));
-	class_destroy(group_class);
-	unregister_chrdev(IPC_DEV_MAJOR, IPC_DEV_NAME);
-
-
+	device_destroy(dev_class, devno);
+	cdev_del(root_cdev);
+	kfree(root_cdev);
+	class_destroy(dev_class);
+	unregister_chrdev_region(devno, IPC_MAX_GROUPS);
 	return 0;
 }
 
@@ -98,8 +144,8 @@ static int ipc_init(void) {
 }
 
 static void  ipc_exit(void) {
- printk(KERN_INFO "ipc exit");
- ipc_group_uninstall();
+	printk(KERN_INFO "ipc exit");
+	ipc_group_uninstall();
 }
 
 
