@@ -12,7 +12,8 @@ MODULE_VERSION("0.01");
 
 
 #define IPC_MAX_GROUPS 16
-#define IPC_DEV_NAME "aosv_ipc_dev"
+#define IPC_ROOT_DEV_NAME "aosv_ipc_root"
+#define IPC_DEV_NAME "aosv_ipc_group"
 #define IPC_CLASS_NAME "aosv_ipc_class"
 
 struct class*  	dev_class ;
@@ -54,7 +55,7 @@ static int ipc_group_install(void)
     printk(KERN_INFO "ipc dev installing");
 
 	/* Register device major and minor */
-	res = alloc_chrdev_region(&devno, 0, IPC_MAX_GROUPS, IPC_DEV_NAME);
+	res = alloc_chrdev_region(&devno, 0, IPC_MAX_GROUPS, IPC_ROOT_DEV_NAME);
 	if (res < 0) {
 		printk(KERN_ERR  "Failed registering char device\n");
 		goto ALLOC_CHRDEV_REGION_FAIL;
@@ -94,7 +95,7 @@ static int ipc_group_install(void)
 
 
 	/*  Creating the device into the pseudo file system */
-	root_device = device_create(dev_class, NULL, devno, NULL, IPC_DEV_NAME);
+	root_device = device_create(dev_class, NULL, devno, NULL, IPC_ROOT_DEV_NAME);
 	if (root_device < 0) {
 		printk(KERN_ERR  "Failed creating device\n");
 		goto DEVICE_CREATE_FAIL;
