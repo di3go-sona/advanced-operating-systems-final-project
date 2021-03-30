@@ -7,10 +7,16 @@ MODULE_FILENAME = ipc_module
 
 LINUX_KERNEL_PATH = /lib/modules/$(LINUX_KERNEL)/build/
 
-obj-m += $(MODULE_FILENAME).o
+obj-m += ipc_module.o 
+ipc_module-objs :=  ipc_module_main.o ipc_group_root.o ipc_group.o
+
 
 all:
 	make -C $(LINUX_KERNEL_PATH) M=$(CURRENT_PATH) modules		
+	gcc ipc_lib.c -o test
+
+test:
+	/bin/sh $(CURRENT_PATH)/test
 
 clean:
 	make -C $(LINUX_KERNEL_PATH) M=$(CURRENT_PATH) clean
