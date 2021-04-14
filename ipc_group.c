@@ -7,9 +7,9 @@
 #include "ipc_module_costants.h"
 
 
-extern struct class*  	dev_class ;
-
-struct cdev* 	group_cdevs[IPC_MAX_GROUPS];
+extern struct class*  	group_dev_class ;
+extern struct cdev* 	group_cdevs[IPC_MAX_GROUPS+1];
+extern dev_t            group_root_devno;
 
 
 int ipc_group_open(struct inode *inode, struct file *filp) {
@@ -41,29 +41,34 @@ struct file_operations ipc_group_ops = {
 
 
 
-int ipc_group_install(group_t groupno, int dev_major)
+int ipc_group_install(group_t groupno)
 {
 	int res;
 
-	
-	dev_t devno;
-	char devname[16] = {0};
+	int dev_major = MAJOR(group_root_devno);
+	dev_t group_devno;
+	char devname[32] = {0};
 	struct device*	group_device ;
 	
 	
     
     if (groupno < 1 || groupno > IPC_MAX_GROUPS){
         printk(KERN_ERR  "Invalid group number, min is 1 and max is %d", IPC_MAX_GROUPS);
-        return -1;
-    }
+        return -INVALID_GROUP_NUM;
+    } else if(group_cdevs[groupno] != NULL) {
+		return -GROUP_ALREADY_INSTALLED;
+	}
 
-    devno = MKDEV(dev_major, groupno);
-	snprintf(devname, "aosv_ipc_root%d", 16, groupno);
+
+
+
+    group_devno = MKDEV(dev_major, groupno);
+	snprintf(devname,32, "aosv_ipc_group%d\n" , groupno);
 
 
 	/* Allocate space for cdev */
-	group_cdevs[groupno-1] = cdev_alloc();
-	if (group_cdevs[groupno-1] < 0) {
+	group_cdevs[groupno] = cdev_alloc();
+	if (group_cdevs[groupno] < 0) {
 		printk(KERN_ERR  "Failed allocating space for cdev struct\n");
 		goto CDEV_ALLOC_FAIL;
 	} else {
@@ -72,9 +77,9 @@ int ipc_group_install(group_t groupno, int dev_major)
 
 
 	/*  Registering device to the kernel */
-	cdev_init(group_cdevs[groupno-1], &ipc_group_ops);
-	group_cdevs[groupno-1] -> owner = THIS_MODULE;
-	res = cdev_add(group_cdevs[groupno-1], devno, 1);
+	cdev_init(group_cdevs[groupno], &ipc_group_ops);
+	group_cdevs[groupno] -> owner = THIS_MODULE;
+	res = cdev_add(group_cdevs[groupno], group_devno, 1);
 	if (res < 0) {
 		printk(KERN_ERR  "Failed making cdev live \n");
 		goto CDEV_ADD_FAIL;
@@ -86,7 +91,7 @@ int ipc_group_install(group_t groupno, int dev_major)
 	
 
 	/*  Creating the device into the pseudo file system */
-	group_device = device_create(dev_class, NULL, devno, NULL, devname);
+	group_device = device_create(group_dev_class, NULL, group_devno, NULL, devname);
 	if (group_device < 0) {
 		printk(KERN_ERR  "Failed creating device\n");
 		goto DEVICE_CREATE_FAIL;
@@ -98,11 +103,11 @@ int ipc_group_install(group_t groupno, int dev_major)
 	
 
 DEVICE_CREATE_FAIL:
-	cdev_del(group_cdevs[groupno-1]);
+	cdev_del(group_cdevs[groupno]);
 
 CDEV_ADD_FAIL:
 	
-	kfree(group_cdevs[groupno-1]);
+	kfree(group_cdevs[groupno]);
 
 CDEV_ALLOC_FAIL:
 
@@ -111,16 +116,26 @@ CDEV_ALLOC_FAIL:
 
 }
 
-int   ipc_group_uninstall(group_t groupno, int dev_major)
+int   ipc_group_uninstall(group_t groupno)
 {
-	dev_t devno;
+	dev_t group_devno;
+	int dev_major = MAJOR(group_root_devno);
 
-    devno = MKDEV(dev_major, groupno);
+    group_devno = MKDEV(dev_major, groupno);
+
+	if (groupno < 1 || groupno > IPC_MAX_GROUPS){
+        printk(KERN_ERR  "Invalid group number, min is 1 and max is %d", IPC_MAX_GROUPS);
+        return -INVALID_GROUP_NUM;
+    } else if(group_cdevs[groupno] == NULL) {
+		return -GROUP_NOT_INSTALLED;
+	}
 
 
-	device_destroy(dev_class, devno);
-	cdev_del(group_cdevs[groupno-1]);
-	kfree(group_cdevs[groupno-1]);
+	device_destroy(group_dev_class, group_devno);
+	cdev_del(group_cdevs[groupno]);
+	kfree(group_cdevs[groupno]);
+
+	group_cdevs[groupno] = NULL;
 
 	return 0;
 }
