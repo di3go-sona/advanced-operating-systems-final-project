@@ -1,15 +1,9 @@
 #ifndef IPC_COSTANTS_H
 #define IPC_COSTANTS_H
 
-#ifdef KERNELSPACE
 // Kernel-space only
 #include "linux/types.h"
 
-extern struct class*  	group_dev_class ;
-extern struct cdev* 	group_root_cdev ;
-extern struct cdev* 	group_cdevs[IPC_MAX_GROUPS+1];
-extern dev_t            group_root_devno;
-#endif
 
 #define IPC_MAX_GROUPS 16
 #define IPC_ROOT_DEV_NAME "aosv_ipc_root"

@@ -8,7 +8,7 @@ MODULE_FILENAME = ipc_module
 LINUX_KERNEL_PATH = /lib/modules/$(LINUX_KERNEL)/build/
 
 obj-m += ipc_module.o 
-ipc_module-objs :=  ipc_module_main.o ipc_group_root.o ipc_group.o ipc_module_costants.o
+ipc_module-objs :=  ipc_module_main.o ipc_group_root.o ipc_group.o
 
 CFLAGS+="-DKERNELSPACE"
 
@@ -38,3 +38,8 @@ insert:
 
 remove:
 	rmmod $(MODULE_FILENAME)
+
+reinsert:
+	rmmod $(MODULE_FILENAME)
+	insmod $(MODULE_FILENAME).ko
+	
