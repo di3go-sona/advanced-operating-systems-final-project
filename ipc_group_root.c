@@ -4,12 +4,12 @@
 #include <linux/slab.h> 
 #include <linux/fs.h>
 
-
+#include <linux/list.h>
 #include "ipc_module_costants.h"
 #include "ipc_group_root.h"
 #include "ipc_group.h"
 
-#define GROUP_DEV_NAMESIZE 32
+
 struct class*  	group_dev_class ;
 int group_major;
 int group_minor;
@@ -163,7 +163,7 @@ int ipc_group_install(group_t groupno)
 	int res;
 
 	dev_t group_devno;
-	char devname[GROUP_DEV_NAMESIZE] = {0};
+	char devname[IPC_DEV_NAMESIZE] = {0};
 	struct device*	group_device ;
 	ipc_group_dev* group_dev;
 	printk(KERN_INFO  "Installing group %d", groupno);
@@ -181,13 +181,12 @@ int ipc_group_install(group_t groupno)
 
 
     group_devno = MKDEV(group_major, groupno);
-	snprintf(devname,GROUP_DEV_NAMESIZE, "aosv_ipc_dev%d" , groupno);
-
+	snprintf(devname,IPC_DEV_NAMESIZE, "aosv_ipc_dev%d" , groupno);
 	group_dev = kmalloc(sizeof(ipc_group_dev), 0);
 
 
+
 	/* Allocate space for cdev */
-	
 	if (group_dev == NULL) {
 		printk(KERN_ERR "Device %d allocation failed", groupno);
 		goto CDEV_ALLOC_FAIL;
@@ -198,8 +197,11 @@ int ipc_group_install(group_t groupno)
 
 	/*  Registering device to the kernel */
 	cdev_init(&(group_dev->cdev), &ipc_group_ops);
+	mutex_init(&(group_dev->lock));
 	group_dev -> cdev.owner = THIS_MODULE;
 	group_dev -> msg_count = 0;
+	INIT_LIST_HEAD(&( group_dev -> msg_list ));
+
 
 	res = cdev_add(&(group_dev->cdev), group_devno, 1);
 	if (res < 0) {
@@ -254,6 +256,8 @@ int ipc_group_uninstall(group_t groupno)
 	} else {
 		group_dev = group_devs[groupno];
 	}
+
+	if (group_dev -> threads_count != 0 ) return -GROUP_NOT_EMPTY;
 
 
 	device_destroy(group_dev_class, group_devno);

@@ -27,6 +27,9 @@ void print_error(int err){
     case GROUP_NOT_INSTALLED:
         printf("ERR: group not installed\n");
         break;
+    case GROUP_NOT_EMPTY:
+        printf("ERR: group is not empty\n");
+        break;
     default:
         printf("ERR: unknown  error %d\n",err );
         break;
@@ -35,8 +38,7 @@ void print_error(int err){
 
 int install_group(group_t groupno, char* path_buffer, int path_len ){ 
     printf("Installing group %d\n", groupno);
-    int fd, err, res;
-    err = SUCCESS;
+    int fd, res;
 
     fd = open("/dev/synch/group", O_RDONLY);
     if (fd<0) return CANNOT_OPEN_GROUP_ROOT;
@@ -44,22 +46,20 @@ int install_group(group_t groupno, char* path_buffer, int path_len ){
     res = ioctl(fd, IPC_GROUP_INSTALL, groupno);
     close(fd);
 
-    if (res != 0) err = errno;
-    
-    if (!(err == SUCCESS || err == GROUP_ALREADY_INSTALLED )) {
-        return errno;
-    } else {
-        if (path_buffer != NULL && path_len > 0){
-            snprintf(path_buffer,path_len, "/dev/synch/group%d", groupno );
-            return SUCCESS;
-        }
+    if (!(res == SUCCESS || res == GROUP_ALREADY_INSTALLED )) return errno;
+
+
+    if (path_buffer != NULL && path_len > 0){
+        snprintf(path_buffer,path_len, "/dev/synch/group%d", groupno );
     }
+
+    return SUCCESS;
+    
 }
 
 int uninstall_group(group_t groupno){
     printf("Uninstalling group %d\n", groupno);
-    int fd, err, res;
-    err = SUCCESS;
+    int fd, res;
 
 
     fd = open("/dev/synch/group", O_RDONLY);
@@ -68,9 +68,9 @@ int uninstall_group(group_t groupno){
     res = ioctl(fd, IPC_GROUP_UNINSTALL, groupno);
     close(fd);
 
-    if (res != 0) err = errno;
+    if (res != 0) return errno;
 
-    return err;
+    return SUCCESS;
 }
 
 
@@ -97,7 +97,7 @@ int test_install_sequential(){
 
 int test_install_random(){
     int i;
-    printf("### Test install randpm\n");
+    printf("[TEST BEGIN] test_install_random\n");
 
     for(i=0; i<20; i++){
         int r = rand() % IPC_MAX_GROUPS;
@@ -111,37 +111,40 @@ int test_install_random(){
     for(i=0; i<IPC_MAX_GROUPS; i++){
         print_error(uninstall_group((group_t) i ));
     }
+    printf("[END TEST]\n\n");
 }
 
 
 int test_messaging_single(void){
-    printf("[TEST] test_messaging_single \n");
+    printf("[BEGIN TEST] test_messaging_single \n");
     int res, i, fd;
     char group_path[32] = {0};
     char msg_buf[32] = {0};
 
     res = install_group(3, group_path, 32);
     printf("group_install res: %d, path: %s\n", res, group_path);
+    sleep(1);
     if (!(res < 0)){
         fd = open(group_path, O_RDWR);
         printf("fd: %d\n", fd);
         for (i=0; i< 32; i++){
-            printf("Loop %d", i);
-            sleep(1);
-            read(fd, msg_buf, 1);
-            write(fd, "hola", 1);
-            printf("\n");
+            write(fd, "hola", 4);
+            read(fd, msg_buf, 4);
+            
         }
+        close(fd);
     }
-    uninstall_group(3);
+    print_error(uninstall_group(3));
+    printf("[END TEST]\n\n");
 
 }
 
 
 
 int main(){
-    // test_install_single();
-    // test_install_sequential();
-    // test_install_random();
+    test_install_single();
+    test_install_sequential();
+    test_install_random();
     test_messaging_single();
+    // test_install_single();
 }
