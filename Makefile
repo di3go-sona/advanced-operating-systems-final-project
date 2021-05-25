@@ -16,7 +16,7 @@ all:
 	make -C  $(LINUX_KERNEL_PATH) M=$(CURRENT_PATH) modules		
 
 test:  ipc_lib.c
-	gcc  -o test ipc_lib.c
+	gcc  -o test ipc_lib.c -pthread
 
 run:
 	/bin/sh $(CURRENT_PATH)/test

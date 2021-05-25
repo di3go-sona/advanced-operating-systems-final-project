@@ -38,6 +38,12 @@ ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff
 	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
 
 	mutex_lock( &(group_dev ->lock));
+	
+	if (group_dev -> msg_count == 0){
+		mutex_unlock( &(group_dev ->lock));
+		return -NO_MESSAGES;
+	}
+
 	(group_dev -> msg_count )-- ;
 	msg = list_first_entry(&(group_dev -> msg_list), ipc_message, next);
 	__list_del_entry(&(msg->next));
