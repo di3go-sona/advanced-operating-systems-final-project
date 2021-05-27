@@ -2,7 +2,8 @@
 #define IPC_COSTANTS_H
 
 // Kernel-space only
-#include "linux/types.h"
+#include <linux/types.h>
+#include <linux/cdev.h>
 
 
 #define IPC_MAX_GROUPS 16

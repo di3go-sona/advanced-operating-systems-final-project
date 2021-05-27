@@ -19,8 +19,6 @@
 int ipc_group_open(struct inode *inode, struct file *filp) {
 	struct cdev *group_cdev;
 	ipc_group_dev *group_dev;
-	
-	printk(KERN_INFO "ipc dev open");
 
 	group_cdev = filp->f_inode->i_cdev;
 	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
@@ -63,15 +61,14 @@ ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff
 	to_copy = lrn > msg -> payload_len ? msg -> payload_len : lrn;
 
 	while( copied < to_copy){
-		printk(KERN_INFO "ipc dev read, buf: %p, len: %lu, remaining: %lu", buf, to_copy, to_copy-copied);
 		res = copy_to_user(buf, msg->payload, to_copy-copied);
 		if (res >0) copied += res;
 		else if (copied ==0) break;
 	}
 
-	DEBUG("freeing %p", msg->payload);
+	// DEBUG("freeing %p", msg->payload);
 	kfree(msg->payload);
-	DEBUG("freeing %p", msg);
+	// DEBUG("freeing %p", msg);
 	kfree(msg);
 
 	DEBUG("read msg \"%.*s\" ", (int)lrn, buf);
@@ -106,6 +103,7 @@ static int _publish_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 
 	return SUCCESS;
 }
+
 static int _revoke_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	struct timer_list *timer = &(msg->timer);
 
@@ -117,6 +115,11 @@ static int _revoke_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	(group_dev -> delayed_msg_count )-- ;
 	__list_del_entry(&(msg->next));
 	mutex_unlock( &(group_dev ->lock));
+
+	return SUCCESS;
+}
+int revoke_delayed_messages(ipc_group_dev* group_dev){
+
 
 	return SUCCESS;
 }
@@ -233,7 +236,7 @@ int ipc_group_release(struct inode *inode, struct file *filp)
 {
 	struct cdev *group_cdev;
 	ipc_group_dev *group_dev;
-	printk(KERN_INFO "ipc dev release");
+
 
 
 

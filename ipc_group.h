@@ -17,6 +17,7 @@ typedef struct ipc_group_dev_t {
 
 
 
+
 typedef struct ipc_message_t {
 	struct list_head next;
 	char* payload;

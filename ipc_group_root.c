@@ -20,7 +20,7 @@
 
 struct class*  	group_dev_class ;
 int group_major;
-int group_minor;
+
 
 struct cdev* 	group_root_cdev ;
 ipc_group_dev* 	group_devs[IPC_MAX_GROUPS+1] = {0};
@@ -34,10 +34,16 @@ int ipc_group_root_open(struct inode *inode, struct file *filp) {
 	return 0;
 }
 
-long int ipc_group_root_ioctl(struct file *file, 
+long int ipc_group_root_ioctl(struct file *filp, 
 						 unsigned int ioctl_num,    
 						 unsigned long ioctl_param){
 	int res;
+	struct cdev *group_root_cdev;
+	ipc_group_root_dev *group_root_dev;
+
+	group_root_cdev = filp->f_inode->i_cdev;
+	group_root_dev = container_of(group_root_cdev, ipc_group_root_dev, cdev);
+
 	mutex_lock(&group_root_lock);
 
     printk(KERN_INFO "root ipc dev ioctl\n");
