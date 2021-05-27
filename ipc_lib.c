@@ -107,8 +107,12 @@ int uninstall_group(group_t groupno){
     res = ioctl(fd, IPC_GROUP_UNINSTALL, groupno);
     close(fd);
 
-    if (res != 0) return errno;
+    if (res != 0) {
+        DEBUG("failed to uninstall group %d", groupno);
+        return errno;
+    }
 
+    DEBUG("group %d uninstalled successfully", groupno);
     return SUCCESS;
 }
 
@@ -213,7 +217,7 @@ struct thread_args {
 void *receiver_thread(void *argp){
     struct thread_args* args = (struct thread_args*)argp;  
     int i;
-
+    sleep(1);
     char *buf = malloc(args -> len);
     for (i=0; i< args -> max_count; i++){
         recv_msg(args -> group_path, buf, args ->len);
@@ -269,8 +273,8 @@ int test_messaging_multi(group_t groupno, int threads_num){
 
 
 int main(){
-    test_install_single(3);
-    test_install_random();
-    test_messaging_single(3);
+    // test_install_single(3);
+    // test_install_random();
+    // test_messaging_single(3);
     test_messaging_multi(3,6);
 }

@@ -27,7 +27,9 @@ typedef enum {
     GROUP_NOT_EMPTY = 5,
     MEM_ALLOCATION_FAILED = 6,
     CANNOT_OPEN_GROUP = 7,
-    NO_MESSAGES = 8
+    NO_MESSAGES = 8,
+    TIMER_DEL_FAILED = 9,
+    TIMER_ADD_FAILED = 10
 } IPC_ERROR;
 
 

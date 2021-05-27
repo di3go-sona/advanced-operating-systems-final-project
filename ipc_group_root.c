@@ -10,6 +10,14 @@
 #include "ipc_group.h"
 
 
+#define DEBUG_ENABLED
+#ifdef DEBUG_ENABLED
+#define DEBUG(...) do{  printk( KERN_INFO "[ DEBUG ] " __VA_ARGS__ );} while( 0 )
+#else
+#define DEBUG(...) do{ } while ( 0 )
+#endif
+
+
 struct class*  	group_dev_class ;
 int group_major;
 int group_minor;
@@ -198,10 +206,14 @@ int ipc_group_install(group_t groupno)
 	/*  Registering device to the kernel */
 	cdev_init(&(group_dev->cdev), &ipc_group_ops);
 	mutex_init(&(group_dev->lock));
+	mutex_init(&(group_dev->delayed_lock));
 	group_dev -> cdev.owner = THIS_MODULE;
 	group_dev -> msg_count = 0;
-	INIT_LIST_HEAD(&( group_dev -> msg_list ));
+	group_dev -> delay = 10;
 
+	INIT_LIST_HEAD(&( group_dev -> msg_list ));
+	INIT_LIST_HEAD(&( group_dev -> delayed_msg_list ));
+	
 
 	res = cdev_add(&(group_dev->cdev), group_devno, 1);
 	if (res < 0) {
@@ -244,7 +256,7 @@ int ipc_group_uninstall(group_t groupno)
 	dev_t group_devno;
 	ipc_group_dev* group_dev;
 
-	printk(KERN_INFO  "Uninstalling group %d", groupno);
+	DEBUG( "Uninstalling group %d", groupno);
 
 	group_devno = MKDEV(group_major, groupno);
 	
@@ -258,6 +270,7 @@ int ipc_group_uninstall(group_t groupno)
 	}
 
 	if (group_dev -> threads_count != 0 ) return -GROUP_NOT_EMPTY;
+	if (group_dev -> delayed_msg_count != 0 ) return -GROUP_NOT_EMPTY;
 
 
 	device_destroy(group_dev_class, group_devno);
