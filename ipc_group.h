@@ -9,7 +9,7 @@ typedef struct ipc_group_dev_t {
 	int msg_count;
 	int delayed_msg_count;
 	int threads_count;
-	int delay;
+	ktime_t delay;
 	struct mutex lock;
 	struct mutex delayed_lock;
 	struct cdev cdev;
@@ -23,7 +23,7 @@ typedef struct ipc_message_t {
 	char* payload;
 	ssize_t payload_len;
 	ipc_group_dev* group_dev;
-	struct timer_list timer;
+	struct hrtimer timer;
 } ipc_message;
 
 

@@ -209,7 +209,7 @@ int ipc_group_install(group_t groupno)
 	mutex_init(&(group_dev->delayed_lock));
 	group_dev -> cdev.owner = THIS_MODULE;
 	group_dev -> msg_count = 0;
-	group_dev -> delay = 10;
+	group_dev -> delay = ktime_set(0,0);
 
 	INIT_LIST_HEAD(&( group_dev -> msg_list ));
 	INIT_LIST_HEAD(&( group_dev -> delayed_msg_list ));

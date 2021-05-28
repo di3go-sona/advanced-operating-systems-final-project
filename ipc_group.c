@@ -5,6 +5,7 @@
 #include <linux/fs.h>
 #include <linux/list.h>
 
+
 #include "ipc_module_costants.h"
 #include "ipc_group.h"
 
@@ -27,7 +28,19 @@ int ipc_group_open(struct inode *inode, struct file *filp) {
 
 	return 0;
 }
+// ssize_t ipc_group_ioctl (struct file * filp, char __user * buf , size_t lrn, loff_t *offset) {
+// 	struct cdev *group_cdev;
+// 	ipc_group_dev *group_dev;
+// 	ipc_message *msg;
+// 	ssize_t copied = 0, to_copy; 
+// 	long res = 0;
 
+// 	DEBUG("reading msg ");
+
+
+// 	group_cdev = filp->f_inode->i_cdev;
+// 	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
+// }
 
 ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff_t *offset) {
 	struct cdev *group_cdev;
@@ -77,13 +90,6 @@ ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff
 
 
 }
-// int _enqueue_message(ipc_message* msg, ipc_group_dev* group){
-
-
-// 	return SUCCESS;
-// }
-
-
 
 static int _publish_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	DEBUG("publishing delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
@@ -105,11 +111,11 @@ static int _publish_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 }
 
 static int _revoke_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
-	struct timer_list *timer = &(msg->timer);
+	struct hrtimer *timer = &(msg->timer);
 
 	DEBUG("revoking delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
-
-	if ( !del_timer( timer ) ) return -TIMER_DEL_FAILED;
+	hrtimer_cancel(timer);
+	// if ( !del_timer( timer ) ) return -TIMER_DEL_FAILED;
 
 	mutex_lock( &(group_dev ->lock));
 	(group_dev -> delayed_msg_count )-- ;
@@ -118,20 +124,20 @@ static int _revoke_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 
 	return SUCCESS;
 }
+
 int revoke_delayed_messages(ipc_group_dev* group_dev){
 
 
 	return SUCCESS;
 }
 
-
-static void _publish_delayed_message_callback( struct timer_list* timer )
+static enum hrtimer_restart _publish_delayed_message_handler(struct hrtimer *timer)
 {
     ipc_message* msg;
 	msg = container_of(timer, ipc_message, timer);
 	_publish_delayed_message(msg, msg ->group_dev);
+    return HRTIMER_NORESTART;  //restart timer
 }
-
 
 static int _enqueue_message(ipc_message* msg, ipc_group_dev* group_dev){
 	DEBUG("enqueuing msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
@@ -143,25 +149,29 @@ static int _enqueue_message(ipc_message* msg, ipc_group_dev* group_dev){
 	return SUCCESS;
 }
 
-
 static int _enqueue_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
-	struct timer_list *timer = &(msg->timer);
+	struct hrtimer *timer = &(msg->timer);
 
 	DEBUG("enqueuing delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
-	timer_setup(timer, _publish_delayed_message_callback, 0);
-	// if ( !add_timer(timer)) return -TIMER_ADD_FAILED;
-	
 
 	mutex_lock( &(group_dev ->delayed_lock));
-	add_timer( &(msg -> timer) );
+	hrtimer_init(timer,CLOCK_MONOTONIC,HRTIMER_MODE_REL);
+	timer -> function = _publish_delayed_message_handler;
+	hrtimer_start(timer,group_dev -> delay,HRTIMER_MODE_REL);
+
 	(group_dev -> delayed_msg_count )++ ;
 	list_add_tail (	&(msg -> next), &(group_dev -> delayed_msg_list));
 	mutex_unlock( &(group_dev ->delayed_lock));
+
+
+	
+
+
+
+
 	return SUCCESS;
 }
-
-
 
 ssize_t ipc_group_write (struct file * filp, const char __user * buf , size_t lrn , loff_t *offset){
 	struct cdev *group_cdev;
@@ -227,10 +237,6 @@ MSG_ALLOC_FAIL:
 
 
 }
-
-
-
-
 
 int ipc_group_release(struct inode *inode, struct file *filp)
 {
