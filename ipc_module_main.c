@@ -10,17 +10,14 @@ MODULE_VERSION("0.01");
 
 #include "ipc_group_root.h"
 
-
-
-
 static int ipc_init(void) {
-    printk(KERN_INFO "ipc init");
+    printk(KERN_INFO "module init");
     ipc_group_root_install();
     return 0;
 }
 
 static void  ipc_exit(void) {
-	printk(KERN_INFO "ipc exit");
+	printk(KERN_INFO "module exit");
 	ipc_group_root_uninstall();
 }
 

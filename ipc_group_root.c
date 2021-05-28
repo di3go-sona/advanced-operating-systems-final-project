@@ -6,66 +6,55 @@
 
 #include <linux/list.h>
 #include "ipc_module_costants.h"
+#include "ipc_kernel_macros.h"
 #include "ipc_group_root.h"
 #include "ipc_group.h"
-
-
-#define DEBUG_ENABLED
-#ifdef DEBUG_ENABLED
-#define DEBUG(...) do{  printk( KERN_INFO "[ DEBUG ] " __VA_ARGS__ );} while( 0 )
-#else
-#define DEBUG(...) do{ } while ( 0 )
-#endif
-
 
 struct class*  	group_dev_class ;
 int group_major;
 
-
-struct cdev* 	group_root_cdev ;
-ipc_group_dev* 	group_devs[IPC_MAX_GROUPS+1] = {0};
-
-DEFINE_MUTEX(group_root_lock);
+ipc_group_root_dev* 	group_root_dev ;
+ipc_group_dev* 			group_devs[IPC_MAX_GROUPS+1] = {0};
 
 
 int ipc_group_root_open(struct inode *inode, struct file *filp) {
-    printk(KERN_INFO "root ipc dev open");
-
-	return 0;
+	return SUCCESS;
 }
 
 long int ipc_group_root_ioctl(struct file *filp, 
 						 unsigned int ioctl_num,    
 						 unsigned long ioctl_param){
 	int res;
-	struct cdev *group_root_cdev;
-	ipc_group_root_dev *group_root_dev;
+	GR_DEBUG( "ioctl");
+	GR_DEBUG( "group_root_dev: %p", group_root_dev);
+	GR_DEBUG( "group_root_dev: %p", &(group_root_dev -> lock));
 
-	group_root_cdev = filp->f_inode->i_cdev;
-	group_root_dev = container_of(group_root_cdev, ipc_group_root_dev, cdev);
+	mutex_lock(&(group_root_dev -> lock));
 
-	mutex_lock(&group_root_lock);
-
-    printk(KERN_INFO "root ipc dev ioctl\n");
-
-	if (ioctl_num == IPC_GROUP_INSTALL){
+	switch (ioctl_num)
+	{
+	case IPC_GROUP_INSTALL:
 		res = ipc_group_install((group_t) ioctl_param);
-	} else if  (ioctl_num == IPC_GROUP_UNINSTALL){
+		break;
+
+	case IPC_GROUP_UNINSTALL:
 		res = ipc_group_uninstall((group_t) ioctl_param);
-	} else {
-		printk(KERN_INFO "unrecognized");
+		break;
+	
+	default:
+		GR_DEBUG( "unrecognized");
 		res = -1;
+		break;
 	}
 
-	mutex_unlock(&group_root_lock);
+	mutex_unlock(&(group_root_dev -> lock));
 	return res;
 }
 
 int ipc_group_root_release(struct inode *inode, struct file *filp)
 {
-    printk(KERN_INFO "root ipc dev release");
-
-	return 0;
+    GR_DEBUG( "root ipc dev release");
+	return SUCCESS;
 }
 
 struct file_operations ipc_group_root_ops = {
@@ -79,17 +68,16 @@ int ipc_group_root_install(void)
 	int res;
 	dev_t devno;
 	struct device* group_root_device;
-
-	printk(KERN_INFO "ipc dev installing");
+	GR_DEBUG( "installing");
 
 
 	/* Register device major and minor */
 	res = alloc_chrdev_region(&devno, 0, IPC_MAX_GROUPS+1, IPC_ROOT_DEV_NAME);
 	if (res < 0) {
-		printk(KERN_ERR  "Failed registering char device\n");
+		printk(KERN_ERR  "alloc_chrdev_region failed\n");
 		goto ALLOC_CHRDEV_REGION_FAIL;
 	} else {
-		printk(KERN_INFO "ipc dev installed with major %d and minor %d", MAJOR(devno), MINOR(devno));
+		GR_DEBUG( "alloc_chrdev_region: major %d and minor %d", MAJOR(devno), MINOR(devno));
 		group_major = MAJOR(devno);
 	}
 
@@ -99,28 +87,30 @@ int ipc_group_root_install(void)
 		printk(KERN_ERR  "Failed creating class\n");
 		goto CLASS_CREATE_FAIL;
 	} else {
-		printk(KERN_INFO "Class creation success");
+		GR_DEBUG( "Class creation success");
 	}
 
-	/* Allocate space for cdev */
-	group_root_cdev = cdev_alloc();
-	if (group_root_cdev < 0) {
-		printk(KERN_ERR  "Failed allocating space for cdev struct\n");
+	/*  Allocating memory */
+	group_root_dev = kmalloc(sizeof(ipc_group_root_dev), GFP_USER);
+	if (group_root_dev == NULL) {
+		printk(KERN_ERR  "kmalloc ko: %p", group_root_dev);
 		goto CDEV_ALLOC_FAIL;
 	} else {
-		printk(KERN_INFO "Device creation success");
+		GR_DEBUG( "kmalloc ok: %p", group_root_dev);
 	}
-
 	
+	/*  Initializing device values */
+	cdev_init(&(group_root_dev -> cdev) , &ipc_group_root_ops);
+	mutex_init(&(group_root_dev->lock));
+	group_root_dev -> cdev.owner = THIS_MODULE;
+
 	/*  Registering device to the kernel */
-	cdev_init(group_root_cdev, &ipc_group_root_ops);
-	group_root_cdev -> owner = THIS_MODULE;
-	res = cdev_add(group_root_cdev,devno , 1);
+	res = cdev_add(&(group_root_dev -> cdev) ,devno , 1);
 	if (res < 0) {
 		printk(KERN_ERR  "Failed making cdev live \n");
 		goto CDEV_ADD_FAIL;
 	} else {
-		printk(KERN_INFO "cdev is now live");
+		GR_DEBUG( "cdev is now live");
 	}
 
 
@@ -130,7 +120,7 @@ int ipc_group_root_install(void)
 		printk(KERN_ERR  "Failed creating device\n");
 		goto DEVICE_CREATE_FAIL;
 	} else {
-		printk(KERN_INFO "Device creation success");
+		GR_DEBUG( "Device creation success");
 	}
 
 	return 0;
@@ -140,11 +130,10 @@ int ipc_group_root_install(void)
 // device_destroy(group_dev_class, group_root_device);
 
 DEVICE_CREATE_FAIL:
-	cdev_del(group_root_cdev);
+	cdev_del(&(group_root_dev -> cdev));
 
 CDEV_ADD_FAIL:
-	
-	kfree(group_root_cdev);
+	kfree(group_root_dev);
 
 CDEV_ALLOC_FAIL:
 	class_destroy(group_dev_class);
@@ -159,17 +148,22 @@ ALLOC_CHRDEV_REGION_FAIL:
 
 int ipc_group_root_uninstall(void)
 {
-	dev_t devno = MKDEV(group_major, 0);
-
+	dev_t devno;
+	GR_DEBUG( "uninstalling");
+	devno = MKDEV(group_major, 0);
+	GR_DEBUG( "device_destroy");
 	device_destroy(group_dev_class, devno);
-	cdev_del(group_root_cdev);
-	kfree(group_root_cdev);
+	GR_DEBUG( "cdev_del");
+	cdev_del(&(group_root_dev -> cdev));
+	GR_DEBUG( "kfree %p",group_root_dev );
+	kfree(group_root_dev);
+	GR_DEBUG( "class_destroy" );
 	class_destroy(group_dev_class);
+	GR_DEBUG( "unregister_chrdev_region");
 	unregister_chrdev_region(devno, IPC_MAX_GROUPS+1);
-	return 0;
+	GR_DEBUG( "uninstalled");
+	return SUCCESS;
 }
-
-
 
 
 int ipc_group_install(group_t groupno)
@@ -180,7 +174,7 @@ int ipc_group_install(group_t groupno)
 	char devname[IPC_DEV_NAMESIZE] = {0};
 	struct device*	group_device ;
 	ipc_group_dev* group_dev;
-	printk(KERN_INFO  "Installing group %d", groupno);
+	GR_DEBUG(  "Installing group %d", groupno);
 
 	
     
@@ -196,7 +190,7 @@ int ipc_group_install(group_t groupno)
 
     group_devno = MKDEV(group_major, groupno);
 	snprintf(devname,IPC_DEV_NAMESIZE, "aosv_ipc_dev%d" , groupno);
-	group_dev = kmalloc(sizeof(ipc_group_dev), 0);
+	group_dev = kmalloc(sizeof(ipc_group_dev), GFP_USER);
 
 
 
@@ -205,7 +199,7 @@ int ipc_group_install(group_t groupno)
 		printk(KERN_ERR "Device %d allocation failed", groupno);
 		goto CDEV_ALLOC_FAIL;
 	} else {
-		printk(KERN_INFO "Device %d allocation ok", groupno);
+		GR_DEBUG( "Device %d allocation ok", groupno);
 	}
 
 
@@ -226,7 +220,7 @@ int ipc_group_install(group_t groupno)
 		printk(KERN_ERR "Device %d add failed", groupno);
 		goto CDEV_ADD_FAIL;
 	} else {
-		printk(KERN_INFO "Device %d add successful", groupno);
+		GR_DEBUG( "Device %d add successful", groupno);
 	}
 
 	
@@ -238,7 +232,7 @@ int ipc_group_install(group_t groupno)
 		printk(KERN_ERR "Device %d creation failed", groupno);
 		goto DEVICE_CREATE_FAIL;
 	} else {
-		printk(KERN_INFO "Device %d creation success", groupno);
+		GR_DEBUG( "Device %d creation success", groupno);
 	}
 
 	group_devs[groupno] = group_dev;
