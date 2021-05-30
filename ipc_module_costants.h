@@ -1,10 +1,7 @@
-#ifndef IPC_COSTANTS_H
-#define IPC_COSTANTS_H
+#pragma once
 
 // Kernel-space only
 #include <linux/types.h>
-#include <linux/cdev.h>
-
 
 #define IPC_MAX_GROUPS 16
 #define IPC_MSG_SIZE 32
@@ -17,6 +14,8 @@
 
 #define IPC_GROUP_INSTALL 0
 #define IPC_GROUP_UNINSTALL 1
+#define SET_SEND_DELAY 2
+#define REVOKE_DELAYED_MESSAGES 3
 
 typedef unsigned int group_t;
 typedef enum {
@@ -30,9 +29,7 @@ typedef enum {
     CANNOT_OPEN_GROUP = 7,
     NO_MESSAGES = 8,
     TIMER_DEL_FAILED = 9,
-    TIMER_ADD_FAILED = 10
+    TIMER_ADD_FAILED = 10,
+    INVALID_IOCTL_NUM = 11,
 } IPC_ERROR;
 
-
-
-#endif

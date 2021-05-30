@@ -1,6 +1,8 @@
 #ifndef IPC_GROUP_ROOT_H
 #define IPC_GROUP_ROOT_H
 
+#include <linux/cdev.h>
+
 #include "ipc_module_costants.h"
 
 typedef struct ipc_group_root_dev_t {

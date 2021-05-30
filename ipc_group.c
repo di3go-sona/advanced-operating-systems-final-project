@@ -28,19 +28,37 @@ int ipc_group_open(struct inode *inode, struct file *filp) {
 
 	return 0;
 }
-// ssize_t ipc_group_ioctl (struct file * filp, char __user * buf , size_t lrn, loff_t *offset) {
-// 	struct cdev *group_cdev;
-// 	ipc_group_dev *group_dev;
-// 	ipc_message *msg;
-// 	ssize_t copied = 0, to_copy; 
-// 	long res = 0;
+long int ipc_group_ioctl(struct file *filp, 
+						 unsigned int ioctl_num,    
+						 unsigned long ioctl_param){
+	struct cdev *group_cdev;
+	ipc_group_dev *group_dev;
+	long res = 0;
+	DEBUG("ioctl");
 
-// 	DEBUG("reading msg ");
+	group_cdev = filp->f_inode->i_cdev;
+	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
 
 
-// 	group_cdev = filp->f_inode->i_cdev;
-// 	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
-// }
+	switch (ioctl_num)
+	{
+	case SET_SEND_DELAY:
+		group_dev -> delay = ktime_set((int)ioctl_param,0);
+		break;
+
+	case REVOKE_DELAYED_MESSAGES:
+		revoke_delayed_messages(group_dev);
+		break;
+
+		
+	default:
+		DEBUG( "unrecognized");
+		res = -INVALID_IOCTL_NUM;
+		break;
+	}
+
+	return res;	
+}
 
 ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff_t *offset) {
 	struct cdev *group_cdev;
@@ -110,23 +128,29 @@ static int _publish_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	return SUCCESS;
 }
 
-static int _revoke_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
-	struct hrtimer *timer = &(msg->timer);
-
-	DEBUG("revoking delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
-	hrtimer_cancel(timer);
-	// if ( !del_timer( timer ) ) return -TIMER_DEL_FAILED;
-
-	mutex_lock( &(group_dev ->lock));
-	(group_dev -> delayed_msg_count )-- ;
-	__list_del_entry(&(msg->next));
-	mutex_unlock( &(group_dev ->lock));
-
-	return SUCCESS;
-}
 
 int revoke_delayed_messages(ipc_group_dev* group_dev){
 
+	struct list_head tmp_list;
+	int tmp_count;
+	ipc_message* tmp_msg = NULL;
+
+	INIT_LIST_HEAD(&tmp_list);
+
+	mutex_lock( &(group_dev ->lock));
+	tmp_count = group_dev -> delayed_msg_count;
+	group_dev -> delayed_msg_count = 0 ;
+	list_replace(&tmp_list, &(group_dev -> delayed_msg_list));
+	mutex_unlock( &(group_dev ->lock));
+
+	tmp_msg = list_first_entry(&tmp_list, ipc_message, next);
+	while (tmp_msg) {
+		tmp_msg = list_first_entry(&tmp_list, ipc_message, next);
+		DEBUG("revoking delayed msg \"%.*s\" ", (int)tmp_msg->payload_len, tmp_msg-> payload);
+		hrtimer_cancel(&(tmp_msg->timer));
+		kfree(tmp_msg -> payload);
+		kfree(tmp_msg);
+	}
 
 	return SUCCESS;
 }

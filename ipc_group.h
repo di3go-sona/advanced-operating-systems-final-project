@@ -28,6 +28,8 @@ typedef struct ipc_message_t {
 
 
 
+int revoke_delayed_messages(ipc_group_dev* group_dev);
+
 
 
 

@@ -43,7 +43,7 @@ long int ipc_group_root_ioctl(struct file *filp,
 	
 	default:
 		GR_DEBUG( "unrecognized");
-		res = -1;
+		res = -SET_SEND_DELAY;
 		break;
 	}
 
