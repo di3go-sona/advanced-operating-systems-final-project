@@ -38,3 +38,6 @@ int send_msg(char* group_path, char* payload, ssize_t payload_len);
 int recv_msg(char* group_path, char* payload, ssize_t payload_len);
 
 void print_code(int err);
+int set_send_delay(char* group_path, int delay);
+int flush_delayed_messages(char* group_path);
+int revoke_delayed_messages(char* group_path);

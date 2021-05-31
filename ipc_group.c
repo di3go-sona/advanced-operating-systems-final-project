@@ -34,7 +34,7 @@ long int ipc_group_ioctl(struct file *filp,
 	struct cdev *group_cdev;
 	ipc_group_dev *group_dev;
 	long res = 0;
-	DEBUG("ioctl");
+	DEBUG("ioctl %d %ld",ioctl_num, ioctl_param );
 
 	group_cdev = filp->f_inode->i_cdev;
 	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
@@ -43,16 +43,17 @@ long int ipc_group_ioctl(struct file *filp,
 	switch (ioctl_num)
 	{
 	case SET_SEND_DELAY:
+		DEBUG("setting delay of %d seconds",(int)ioctl_param );
 		group_dev -> delay = ktime_set((int)ioctl_param,0);
 		break;
 
 	case REVOKE_DELAYED_MESSAGES:
+		DEBUG("revoke delayed messages" );
 		revoke_delayed_messages(group_dev);
 		break;
-
 		
 	default:
-		DEBUG( "unrecognized");
+		DEBUG( "unrecognized %d", ioctl_num);
 		res = -INVALID_IOCTL_NUM;
 		break;
 	}
@@ -132,25 +133,40 @@ static int _publish_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 int revoke_delayed_messages(ipc_group_dev* group_dev){
 
 	struct list_head tmp_list;
+	ipc_message* tmp_msg, *_tmp_msg;
 	int tmp_count;
-	ipc_message* tmp_msg = NULL;
 
 	INIT_LIST_HEAD(&tmp_list);
 
 	mutex_lock( &(group_dev ->lock));
+
 	tmp_count = group_dev -> delayed_msg_count;
-	group_dev -> delayed_msg_count = 0 ;
-	list_replace(&tmp_list, &(group_dev -> delayed_msg_list));
+	if (tmp_count == 0 ) {
+		DEBUG("No message to revoke");
+	} else {
+		group_dev -> delayed_msg_count = 0 ;
+		DEBUG("revoking %d delayed messages ",tmp_count);
+		list_splice_init(  &(group_dev -> delayed_msg_list), &tmp_list );
+	};
+
 	mutex_unlock( &(group_dev ->lock));
 
-	tmp_msg = list_first_entry(&tmp_list, ipc_message, next);
-	while (tmp_msg) {
-		tmp_msg = list_first_entry(&tmp_list, ipc_message, next);
-		DEBUG("revoking delayed msg \"%.*s\" ", (int)tmp_msg->payload_len, tmp_msg-> payload);
+
+	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
 		hrtimer_cancel(&(tmp_msg->timer));
+	}
+
+	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
+		__list_del_entry(&(tmp_msg -> next) );
 		kfree(tmp_msg -> payload);
 		kfree(tmp_msg);
 	}
+
+	// while (tmp_count -- > 0) {
+	// 	tmp_msg = list_first_entry(&tmp_list, ipc_message, next);
+	// 	DEBUG("revoking delayed msg \"%.*s\" ", (int)tmp_msg->payload_len, tmp_msg-> payload);
+	// 	hrtimer_cancel(&(tmp_msg->timer));
+	// }
 
 	return SUCCESS;
 }
@@ -283,7 +299,8 @@ struct file_operations ipc_group_ops = {
 	.open = ipc_group_open,
 	.read = ipc_group_read,
 	.write = ipc_group_write,
-	.release = ipc_group_release
+	.release = ipc_group_release,
+	.unlocked_ioctl = ipc_group_ioctl
 };
 
 

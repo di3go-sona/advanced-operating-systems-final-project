@@ -2,6 +2,7 @@
 
 // Kernel-space only
 #include <linux/types.h>
+#include <linux/ioctl.h>
 
 #define IPC_MAX_GROUPS 16
 #define IPC_MSG_SIZE 32
@@ -10,12 +11,13 @@
 #define IPC_ROOT_DEV_NAME "aosv_ipc_root"
 #define IPC_CLASS_NAME "aosv_ipc_class"
 
+#define IPC_IOCTL_MAGIC 'W'
 
-
-#define IPC_GROUP_INSTALL 0
-#define IPC_GROUP_UNINSTALL 1
-#define SET_SEND_DELAY 2
-#define REVOKE_DELAYED_MESSAGES 3
+#define IPC_GROUP_INSTALL _IO( IPC_IOCTL_MAGIC, 0)
+#define IPC_GROUP_UNINSTALL _IO( IPC_IOCTL_MAGIC, 1)
+#define SET_SEND_DELAY _IO( IPC_IOCTL_MAGIC, 3)
+#define REVOKE_DELAYED_MESSAGES _IO( IPC_IOCTL_MAGIC, 4)
+#define FLUSH_DELAYED_MESSAGES _IO( IPC_IOCTL_MAGIC, 5)
 
 typedef unsigned int group_t;
 typedef enum {

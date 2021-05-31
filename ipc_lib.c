@@ -1,5 +1,6 @@
 #include <stdio.h>
-
+#include <string.h>
+#include <errno.h>
 #include "ipc_lib.h"
 
 
@@ -92,8 +93,6 @@ int send_msg(char* group_path, char* payload, ssize_t payload_len){
     return SUCCESS;
 }
 
-
-
 int recv_msg(char* group_path, char* payload, ssize_t payload_len){
     DEBUG("reading msg from %s", group_path);
     int group_fd, res ;
@@ -111,3 +110,37 @@ int recv_msg(char* group_path, char* payload, ssize_t payload_len){
     
 }
 
+
+int set_send_delay(char* group_path, int delay){
+    int group_fd, res ;
+    group_fd = open(group_path, O_RDWR);
+    DEBUG("set send delay of %s to %d seconds (fd:%d)", group_path, delay, group_fd);
+
+    if (group_fd < 0 ) return -CANNOT_OPEN_GROUP;
+    res = ioctl(group_fd, SET_SEND_DELAY, 10);
+    print_code(res);
+    print_code(errno);
+    printf( "%s\n", strerror(errno) );
+    close(group_fd);
+    return SUCCESS;
+}
+
+int flush_delayed_messages(char* group_path){
+    DEBUG("flush delayed messages of %s", group_path);
+    int group_fd, res ;
+    group_fd = open(group_path, O_RDONLY);
+    if (group_fd < 0 ) return -CANNOT_OPEN_GROUP;
+    res = ioctl(group_fd, FLUSH_DELAYED_MESSAGES, NULL);
+    close(group_fd);
+    return SUCCESS;
+}
+
+int revoke_delayed_messages(char* group_path){
+    DEBUG("revoke delayed messages of %s", group_path);
+    int group_fd, res ;
+    group_fd = open(group_path, O_RDONLY);
+    if (group_fd < 0 ) return -CANNOT_OPEN_GROUP;
+    res = ioctl(group_fd, REVOKE_DELAYED_MESSAGES, NULL);
+    close(group_fd);
+    return SUCCESS;
+}

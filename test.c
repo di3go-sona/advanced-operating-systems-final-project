@@ -108,7 +108,7 @@ int test_messaging_single(group_t groupno){
     TEST_END();
 }
 
-int test_messaging_multi(group_t groupno, int threads_num){
+int test_messaging_multi(group_t groupno, int threads_num, int msg_num){
     TEST_BEGIN("test_messaging_multi");
     int res, i;
     char group_path[32] = {0};
@@ -139,9 +139,30 @@ int test_messaging_multi(group_t groupno, int threads_num){
     TEST_END();
 }
 
+int test_revoke_single(group_t groupno){
+    TEST_BEGIN("test_revoke_single");
+    int res, i;
+    char group_path[32] = {0};
+    char msg_buf[32] = {0};
+
+    res = install_group(groupno, group_path, 32);
+    if (res < 0) return res;
+    sleep(2);
+    set_send_delay(group_path, 10);
+    
+    for (i=0; i< 4; i++){
+        _send_random_msg(group_path, 4);
+    }
+
+    revoke_delayed_messages(group_path);
+    uninstall_group(groupno);
+    TEST_END();
+}
+
 int main(){
     // test_install_single(3);
     // test_install_random();
     // test_messaging_single(3);
-    test_messaging_multi(3,6);
+    // test_messaging_multi(3,6);
+    test_revoke_single(4);
 }

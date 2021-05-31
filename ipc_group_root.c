@@ -25,9 +25,7 @@ long int ipc_group_root_ioctl(struct file *filp,
 						 unsigned int ioctl_num,    
 						 unsigned long ioctl_param){
 	int res;
-	GR_DEBUG( "ioctl");
-	GR_DEBUG( "group_root_dev: %p", group_root_dev);
-	GR_DEBUG( "group_root_dev: %p", &(group_root_dev -> lock));
+	GR_DEBUG( "ioctl %d %ld", ioctl_num, ioctl_param);
 
 	mutex_lock(&(group_root_dev -> lock));
 
@@ -42,7 +40,7 @@ long int ipc_group_root_ioctl(struct file *filp,
 		break;
 	
 	default:
-		GR_DEBUG( "unrecognized");
+		GR_DEBUG( "unrecognized %d", ioctl_num);
 		res = -SET_SEND_DELAY;
 		break;
 	}
