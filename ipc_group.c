@@ -138,18 +138,18 @@ int revoke_delayed_messages(ipc_group_dev* group_dev){
 
 	INIT_LIST_HEAD(&tmp_list);
 
-	mutex_lock( &(group_dev ->lock));
+	mutex_lock( &(group_dev ->delayed_lock));
 
 	tmp_count = group_dev -> delayed_msg_count;
 	if (tmp_count == 0 ) {
 		DEBUG("No message to revoke");
 	} else {
 		group_dev -> delayed_msg_count = 0 ;
-		DEBUG("revoking %d delayed messages ",tmp_count);
+		DEBUG("Revoking %d delayed messages ",tmp_count);
 		list_splice_init(  &(group_dev -> delayed_msg_list), &tmp_list );
 	};
 
-	mutex_unlock( &(group_dev ->lock));
+	mutex_unlock( &(group_dev ->delayed_lock));
 
 
 	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
@@ -162,11 +162,38 @@ int revoke_delayed_messages(ipc_group_dev* group_dev){
 		kfree(tmp_msg);
 	}
 
-	// while (tmp_count -- > 0) {
-	// 	tmp_msg = list_first_entry(&tmp_list, ipc_message, next);
-	// 	DEBUG("revoking delayed msg \"%.*s\" ", (int)tmp_msg->payload_len, tmp_msg-> payload);
-	// 	hrtimer_cancel(&(tmp_msg->timer));
-	// }
+	return SUCCESS;
+}
+
+int flush_delayed_messages(ipc_group_dev* group_dev){
+
+	struct list_head tmp_list;
+	ipc_message* tmp_msg, *_tmp_msg;
+	int tmp_count;
+
+	INIT_LIST_HEAD(&tmp_list);
+
+	mutex_lock( &(group_dev ->delayed_lock));
+
+	tmp_count = group_dev -> delayed_msg_count;
+	if (tmp_count == 0 ) {
+		DEBUG("No message to flush");
+	} else {
+		group_dev -> delayed_msg_count = 0 ;
+		DEBUG("Flushing %d delayed messages ",tmp_count);
+		list_splice_init(  &(group_dev -> delayed_msg_list), &tmp_list );
+	};
+
+	mutex_unlock( &(group_dev ->delayed_lock));
+
+
+	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
+		hrtimer_cancel(&(tmp_msg->timer));
+	}
+
+	mutex_lock( &(group_dev ->lock));
+	list_splice( &tmp_list,  &(group_dev -> delayed_msg_list) );
+	mutex_unlock( &(group_dev ->lock));
 
 	return SUCCESS;
 }
