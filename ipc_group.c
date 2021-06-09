@@ -4,111 +4,24 @@
 #include <linux/slab.h> 
 #include <linux/fs.h>
 #include <linux/list.h>
+#include <linux/moduleparam.h>
 
 
+#include <linux/wait.h>
 #include "ipc_module_costants.h"
+#include "ipc_kernel_macros.h"
 #include "ipc_group.h"
 
-#define DEBUG_ENABLED
-#ifdef DEBUG_ENABLED
-#define DEBUG(...) do{  printk( KERN_INFO "[ DEBUG ] " __VA_ARGS__ );} while( 0 )
-#else
-#define DEBUG(...) do{ } while ( 0 )
-#endif
 
 
-int ipc_group_open(struct inode *inode, struct file *filp) {
-	struct cdev *group_cdev;
-	ipc_group_dev *group_dev;
-
-	group_cdev = filp->f_inode->i_cdev;
-	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
-	group_dev -> threads_count ++ ;
+int max_message_size = 16;
+int max_storage_size = 4096;
+int curr_storage_size = 0;
 
 
-	return 0;
-}
-long int ipc_group_ioctl(struct file *filp, 
-						 unsigned int ioctl_num,    
-						 unsigned long ioctl_param){
-	struct cdev *group_cdev;
-	ipc_group_dev *group_dev;
-	long res = 0;
-	DEBUG("ioctl %d %ld",ioctl_num, ioctl_param );
+module_param(max_message_size, int, 0660);
+module_param(max_storage_size, int, 0660);
 
-	group_cdev = filp->f_inode->i_cdev;
-	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
-
-
-	switch (ioctl_num)
-	{
-	case SET_SEND_DELAY:
-		DEBUG("setting delay of %d seconds",(int)ioctl_param );
-		group_dev -> delay = ktime_set((int)ioctl_param,0);
-		break;
-
-	case REVOKE_DELAYED_MESSAGES:
-		DEBUG("revoke delayed messages" );
-		revoke_delayed_messages(group_dev);
-		break;
-		
-	default:
-		DEBUG( "unrecognized %d", ioctl_num);
-		res = -INVALID_IOCTL_NUM;
-		break;
-	}
-
-	return res;	
-}
-
-ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff_t *offset) {
-	struct cdev *group_cdev;
-	ipc_group_dev *group_dev;
-	ipc_message *msg;
-	ssize_t copied = 0, to_copy; 
-	long res = 0;
-
-	DEBUG("reading msg ");
-
-
-	group_cdev = filp->f_inode->i_cdev;
-	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
-
-	mutex_lock( &(group_dev ->lock));
-	
-	if (group_dev -> msg_count == 0){
-		mutex_unlock( &(group_dev ->lock));
-		DEBUG("no msg found");
-
-		return -NO_MESSAGES;
-	}
-
-	
-	msg = list_first_entry(&(group_dev -> msg_list), ipc_message, next);
-	(group_dev -> msg_count )-- ;
-
-	__list_del_entry(&(msg->next));
-	mutex_unlock( &(group_dev ->lock));
-
-	to_copy = lrn > msg -> payload_len ? msg -> payload_len : lrn;
-
-	while( copied < to_copy){
-		res = copy_to_user(buf, msg->payload, to_copy-copied);
-		if (res >0) copied += res;
-		else if (copied ==0) break;
-	}
-
-	// DEBUG("freeing %p", msg->payload);
-	kfree(msg->payload);
-	// DEBUG("freeing %p", msg);
-	kfree(msg);
-
-	DEBUG("read msg \"%.*s\" ", (int)lrn, buf);
-
-	return SUCCESS;
-
-
-}
 
 static int _publish_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	DEBUG("publishing delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
@@ -117,24 +30,24 @@ static int _publish_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	(group_dev -> delayed_msg_count )-- ;
 	__list_del_entry(&(msg->next));
 	mutex_unlock( &(group_dev ->delayed_lock));
-	DEBUG("dequeued delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
+	// DEBUG("dequeued delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
 
 	mutex_lock( &(group_dev ->lock));
 	(group_dev -> msg_count )++ ;
 	list_add_tail (	&(msg -> next), &(group_dev -> msg_list));
 	mutex_unlock( &(group_dev ->lock));
-	DEBUG("published delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
+	// DEBUG("published delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
 	return SUCCESS;
 }
 
-
-int revoke_delayed_messages(ipc_group_dev* group_dev){
+static int _revoke_delayed_messages(ipc_group_dev* group_dev){
 
 	struct list_head tmp_list;
 	ipc_message* tmp_msg, *_tmp_msg;
 	int tmp_count;
+	int payload_len;
 
 	INIT_LIST_HEAD(&tmp_list);
 
@@ -151,21 +64,23 @@ int revoke_delayed_messages(ipc_group_dev* group_dev){
 
 	mutex_unlock( &(group_dev ->delayed_lock));
 
-
 	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
 		hrtimer_cancel(&(tmp_msg->timer));
 	}
 
 	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
 		__list_del_entry(&(tmp_msg -> next) );
+		payload_len = tmp_msg -> payload_len;
 		kfree(tmp_msg -> payload);
 		kfree(tmp_msg);
+		__sync_sub_and_fetch( &curr_storage_size, payload_len + sizeof(ipc_message));
+
 	}
 
 	return SUCCESS;
 }
 
-int flush_delayed_messages(ipc_group_dev* group_dev){
+static int _flush_delayed_messages(ipc_group_dev* group_dev){
 
 	struct list_head tmp_list;
 	ipc_message* tmp_msg, *_tmp_msg;
@@ -192,8 +107,47 @@ int flush_delayed_messages(ipc_group_dev* group_dev){
 	}
 
 	mutex_lock( &(group_dev ->lock));
-	list_splice( &tmp_list,  &(group_dev -> delayed_msg_list) );
+	list_splice( &tmp_list,  &(group_dev -> msg_list) );
+	group_dev -> msg_count += tmp_count ;
 	mutex_unlock( &(group_dev ->lock));
+
+	return SUCCESS;
+}
+
+static int _sleep_on_barrier(ipc_group_dev* group_dev){
+	struct wait_queue_entry wait_entry;
+	int pos;
+	
+	// init_waitqueue_entry(&wait_entry, current);
+	// add_wait_queue(&(group_dev -> wait_queue), &wait_entry);
+
+	
+	pos = __sync_add_and_fetch( &(group_dev -> waiting_count), 1);
+	DEBUG("barrier: sleeping pos %d", pos);
+
+	wait_event_interruptible(group_dev -> wait_queue, group_dev -> awaking_count > 0);
+	
+	__sync_sub_and_fetch( &(group_dev -> awaking_count), 1);
+
+
+
+	DEBUG("barrier: awoke pos %d", pos);
+
+
+	return SUCCESS;
+}
+
+static int _awake_barrier(ipc_group_dev* group_dev){
+	int to_awake;
+	DEBUG("barrier: wake up issued");
+
+	// group_dev -> awaking = true;
+	
+	to_awake = __sync_fetch_and_and( &(group_dev -> waiting_count), 0);
+	__sync_add_and_fetch( &(group_dev -> awaking_count), to_awake);
+	wake_up_nr(&(group_dev -> wait_queue), to_awake);
+	// group_dev -> awaking = false;
+	
 
 	return SUCCESS;
 }
@@ -231,13 +185,118 @@ static int _enqueue_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	list_add_tail (	&(msg -> next), &(group_dev -> delayed_msg_list));
 	mutex_unlock( &(group_dev ->delayed_lock));
 
+	return SUCCESS;
+}
+
+
+int ipc_group_open(struct inode *inode, struct file *filp) {
+	struct cdev *group_cdev;
+	ipc_group_dev *group_dev;
+
+	group_cdev = filp->f_inode->i_cdev;
+	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
+	group_dev -> threads_count ++ ;
+
+	return 0;
+}
+
+long int ipc_group_ioctl(struct file *filp, 
+						 unsigned int ioctl_num,    
+						 unsigned long ioctl_param){
+	struct cdev *group_cdev;
+	ipc_group_dev *group_dev;
+	long res = SUCCESS;
+
+	group_cdev = filp->f_inode->i_cdev;
+	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
+
+	switch (ioctl_num)
+	{
+	case SET_SEND_DELAY:
+		DEBUG("ioctl: setting delay of %d seconds",(int)ioctl_param );
+		group_dev -> delay = ktime_set((int)ioctl_param,0);
+		break;
+
+	case REVOKE_DELAYED_MESSAGES:
+		DEBUG("ioctl: revoke delayed messages" );
+		_revoke_delayed_messages(group_dev);
+		break;
+
+	case FLUSH_DELAYED_MESSAGES:
+		DEBUG("ioctl: flush delayed messages" );
+		_flush_delayed_messages(group_dev);
+		break;
+
+	case SLEEP_ON_BARRIER:
+		DEBUG("ioctl: sleep on barrier" );
+		_sleep_on_barrier(group_dev);
+		break;
+
+	case AWAKE_BARRIER:
+		DEBUG("ioctl: awake barrier" );
+		_awake_barrier(group_dev);
+		break;
+		
+	default:
+		DEBUG( "ioctl: unrecognized %d", ioctl_num);
+		res = -INVALID_IOCTL_NUM;
+		break;
+	}
+
+	return res;	
+}
+
+ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff_t *offset) {
+	struct cdev *group_cdev;
+	ipc_group_dev *group_dev;
+	ipc_message *msg;
+	ssize_t copied = 0, to_copy; 
+	long res = 0;
+	int payload_len;
+
+	DEBUG("reading msg ");
+
+
+	group_cdev = filp->f_inode->i_cdev;
+	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
+
+	mutex_lock( &(group_dev ->lock));
+	
+	if (group_dev -> msg_count == 0){
+		mutex_unlock( &(group_dev ->lock));
+		DEBUG("no msg found");
+
+		return -NO_MESSAGES;
+	}
 
 	
+	msg = list_first_entry(&(group_dev -> msg_list), ipc_message, next);
+	(group_dev -> msg_count )-- ;
 
+	__list_del_entry(&(msg->next));
+	mutex_unlock( &(group_dev ->lock));
 
+	to_copy = lrn > msg -> payload_len ? msg -> payload_len : lrn;
 
+	while( copied < to_copy){
+		res = copy_to_user(buf, msg->payload, to_copy-copied);
+		if (res >0) copied += res;
+		else if (copied ==0) break;
+	}
+
+	// DEBUG("freeing %p", msg->payload);
+	payload_len = msg -> payload_len;
+	kfree(msg->payload);
+	// DEBUG("freeing %p", msg);
+	kfree(msg);
+
+	__sync_sub_and_fetch( &curr_storage_size, payload_len + sizeof(ipc_message));
+
+	DEBUG("read msg \"%.*s\" ", (int)lrn, buf);
 
 	return SUCCESS;
+
+
 }
 
 ssize_t ipc_group_write (struct file * filp, const char __user * buf , size_t lrn , loff_t *offset){
@@ -247,8 +306,24 @@ ssize_t ipc_group_write (struct file * filp, const char __user * buf , size_t lr
 	char *payload_buf; 
 	ssize_t copied =0 ;
 	long res = 0;
+	int old_storage_size, new_storage_size;
 		
-	DEBUG("writing msg \"%.*s\" ", (int)lrn, buf);
+	DEBUG("writing msg \"%.*s\"", (int)lrn, buf);
+
+	// Check if messafe size is less than maximum
+	if (lrn > max_message_size) return -EFBIG;
+	do{
+		old_storage_size = curr_storage_size;
+		new_storage_size = old_storage_size + lrn + sizeof(ipc_message);
+		if (new_storage_size > max_storage_size) {
+			DEBUG("No space left");
+			return -ENOSPC;		
+		}
+		
+
+	} while (__sync_bool_compare_and_swap (&curr_storage_size, old_storage_size, new_storage_size) == false );
+
+
 
 
 	group_cdev = filp->f_inode->i_cdev;

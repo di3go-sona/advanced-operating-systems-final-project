@@ -6,10 +6,8 @@
 #include "ipc_module_costants.h"
 
 typedef struct ipc_group_root_dev_t {
-	int max_space;
-	int current_space;
+	struct mutex lock;
 	struct cdev cdev;
-    struct mutex lock;
 } ipc_group_root_dev;
 
 int ipc_group_root_install(void);

@@ -13,6 +13,7 @@
 struct class*  	group_dev_class ;
 int group_major;
 
+
 ipc_group_root_dev* 	group_root_dev ;
 ipc_group_dev* 			group_devs[IPC_MAX_GROUPS+1] = {0};
 
@@ -41,7 +42,6 @@ long int ipc_group_root_ioctl(struct file *filp,
 	
 	default:
 		GR_DEBUG( "unrecognized %d", ioctl_num);
-		res = -SET_SEND_DELAY;
 		break;
 	}
 
@@ -177,9 +177,10 @@ int ipc_group_install(group_t groupno)
 	
     
     if (groupno < 1 || groupno > IPC_MAX_GROUPS){
-        printk(KERN_ERR  "Invalid group number, min is 1 and max is %d", IPC_MAX_GROUPS);
+        GR_DEBUG("Invalid group number, min is 1 and max is %d", IPC_MAX_GROUPS);
         return -INVALID_GROUP_NUM;
     } else if(group_devs[groupno] != NULL) {
+		GR_DEBUG("Group already installed");
 		return -GROUP_ALREADY_INSTALLED;
 	}
 
@@ -208,6 +209,9 @@ int ipc_group_install(group_t groupno)
 	group_dev -> cdev.owner = THIS_MODULE;
 	group_dev -> msg_count = 0;
 	group_dev -> delay = ktime_set(0,0);
+	group_dev -> waiting_count = 0;
+	group_dev -> awaking_count = 0;
+	init_waitqueue_head( &(group_dev -> wait_queue));
 
 	INIT_LIST_HEAD(&( group_dev -> msg_list ));
 	INIT_LIST_HEAD(&( group_dev -> delayed_msg_list ));
