@@ -98,8 +98,8 @@ void *receiver_thread(void *argp)
     
     while ( 1 ) {
         err = recv_msg( args -> groupno, buf, 128);
-        if (err != 0) (args -> repeat_count)--;
-        if (args -> repeat_count == 0) break ;
+        // if (err != 0) (args -> repeat_count)--;
+        if (--(args -> repeat_count) == 0) break ;
         _set_timespec(&time, args -> repeat_delay);
         nanosleep(&time, &remaining_time);
     }

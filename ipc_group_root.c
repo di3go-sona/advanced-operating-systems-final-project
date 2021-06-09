@@ -10,12 +10,7 @@
 #include "ipc_group_root.h"
 #include "ipc_group.h"
 
-struct class*  	group_dev_class ;
-int group_major;
 
-
-ipc_group_root_dev* 	group_root_dev ;
-ipc_group_dev* 			group_devs[IPC_MAX_GROUPS+1] = {0};
 
 
 int ipc_group_root_open(struct inode *inode, struct file *filp) {
@@ -251,35 +246,4 @@ CDEV_ALLOC_FAIL:
 	group_devs[groupno] = NULL;
 	return res;
 
-}
-
-int ipc_group_uninstall(group_t groupno)
-{
-	dev_t group_devno;
-	ipc_group_dev* group_dev;
-
-	DEBUG( "Uninstalling group %d", groupno);
-
-	group_devno = MKDEV(group_major, groupno);
-	
-	if (groupno < 1 || groupno > IPC_MAX_GROUPS){
-        printk(KERN_ERR  "Invalid group number, min is 1 and max is %d", IPC_MAX_GROUPS);
-        return -INVALID_GROUP_NUM;
-    } else if(group_devs[groupno] == NULL) {
-		return -GROUP_NOT_INSTALLED;
-	} else {
-		group_dev = group_devs[groupno];
-	}
-
-	if (group_dev -> threads_count != 0 ) return -GROUP_NOT_EMPTY;
-	if (group_dev -> delayed_msg_count != 0 ) return -GROUP_NOT_EMPTY;
-
-
-	device_destroy(group_dev_class, group_devno);
-	cdev_del(&(group_dev->cdev));
-	kfree(group_dev);
-
-	group_devs[groupno] = NULL;
-
-	return 0;
 }

@@ -18,6 +18,12 @@ int max_message_size = 16;
 int max_storage_size = 4096;
 int curr_storage_size = 0;
 
+struct class*  	group_dev_class ;
+int group_major;
+
+
+ipc_group_root_dev* 	group_root_dev ;
+ipc_group_dev* 			group_devs[IPC_MAX_GROUPS+1] = {0};
 
 module_param(max_message_size, int, 0660);
 module_param(max_storage_size, int, 0660);
@@ -115,11 +121,8 @@ static int _flush_delayed_messages(ipc_group_dev* group_dev){
 }
 
 static int _sleep_on_barrier(ipc_group_dev* group_dev){
-	struct wait_queue_entry wait_entry;
 	int pos;
-	
-	// init_waitqueue_entry(&wait_entry, current);
-	// add_wait_queue(&(group_dev -> wait_queue), &wait_entry);
+
 
 	
 	pos = __sync_add_and_fetch( &(group_dev -> waiting_count), 1);
@@ -406,3 +409,35 @@ struct file_operations ipc_group_ops = {
 };
 
 
+
+int ipc_group_uninstall(group_t groupno)
+{
+	dev_t group_devno;
+	ipc_group_dev* group_dev;
+
+	DEBUG( "Uninstalling group %d", groupno);
+
+	group_devno = MKDEV(group_major, groupno);
+	
+	if (groupno < 1 || groupno > IPC_MAX_GROUPS){
+        printk(KERN_ERR  "Invalid group number, min is 1 and max is %d", IPC_MAX_GROUPS);
+        return -INVALID_GROUP_NUM;
+    } else if(group_devs[groupno] == NULL) {
+		return -GROUP_NOT_INSTALLED;
+	} else {
+		group_dev = group_devs[groupno];
+	}
+
+	(group_dev -> closing = true);
+	while (group_dev -> threads_count != 0 ){};
+	_revoke_delayed_messages( group_dev );
+
+
+	device_destroy(group_dev_class, group_devno);
+	cdev_del(&(group_dev->cdev));
+	kfree(group_dev);
+
+	group_devs[groupno] = NULL;
+
+	return 0;
+}

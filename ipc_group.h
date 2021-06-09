@@ -16,9 +16,14 @@ typedef struct ipc_group_dev_t {
 	struct wait_queue_head wait_queue;
 	int waiting_count;
 	int awaking_count;
+	bool closing;
 	struct cdev cdev;
 } ipc_group_dev;
 
+typedef struct ipc_group_root_dev_t {
+	struct mutex lock;
+	struct cdev cdev;
+} ipc_group_root_dev;
 
 
 
@@ -34,8 +39,15 @@ typedef struct ipc_message_t {
 extern int max_message_size;
 extern int max_storage_size;
 
+extern struct class*  	group_dev_class ;
+extern int group_major;
 
 
+extern ipc_group_root_dev* 	group_root_dev ;
+extern ipc_group_dev* 		group_devs[IPC_MAX_GROUPS+1];
+
+int ipc_group_install(group_t groupno);
+int ipc_group_uninstall(group_t groupno);
 
 
 
