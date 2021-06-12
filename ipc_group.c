@@ -196,11 +196,13 @@ int ipc_group_open(struct inode *inode, struct file *filp) {
 	struct cdev *group_cdev;
 	ipc_group_dev *group_dev;
 
+
 	group_cdev = filp->f_inode->i_cdev;
 	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
+	if (group_dev -> closing) return -GROUP_CLOSING;
+	
 	group_dev -> threads_count ++ ;
-
-	return 0;
+	return SUCCESS;
 }
 
 long int ipc_group_ioctl(struct file *filp, 
@@ -429,7 +431,7 @@ int ipc_group_uninstall(group_t groupno)
 	}
 
 	(group_dev -> closing = true);
-	while (group_dev -> threads_count != 0 ){};
+	while (group_dev -> threads_count > 0 ){};
 	_revoke_delayed_messages( group_dev );
 
 

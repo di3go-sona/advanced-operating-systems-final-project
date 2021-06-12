@@ -14,6 +14,7 @@
 
 
 int ipc_group_root_open(struct inode *inode, struct file *filp) {
+	if (group_root_dev -> closing) return -GROUP_CLOSING;
 	return SUCCESS;
 }
 
@@ -97,6 +98,8 @@ int ipc_group_root_install(void)
 	cdev_init(&(group_root_dev -> cdev) , &ipc_group_root_ops);
 	spin_lock_init(&(group_root_dev->lock));
 	group_root_dev -> cdev.owner = THIS_MODULE;
+	group_root_dev -> closing = false;
+
 
 	/*  Registering device to the kernel */
 	res = cdev_add(&(group_root_dev -> cdev) ,devno , 1);
@@ -142,7 +145,17 @@ ALLOC_CHRDEV_REGION_FAIL:
 
 int ipc_group_root_uninstall(void)
 {
+	int i;
 	dev_t devno;
+
+	spin_lock(&(group_root_dev -> lock));
+	group_root_dev -> closing = true;
+	for (i=1; i<= IPC_MAX_GROUPS; i++){
+		ipc_group_uninstall((group_t)i);
+	}
+	spin_unlock(&(group_root_dev -> lock));
+
+	
 	GR_DEBUG( "uninstalling");
 	devno = MKDEV(group_major, 0);
 	GR_DEBUG( "device_destroy");

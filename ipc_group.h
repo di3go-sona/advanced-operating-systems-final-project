@@ -22,6 +22,7 @@ typedef struct ipc_group_dev_t {
 
 typedef struct ipc_group_root_dev_t {
 	spinlock_t lock;
+	bool closing;
 	struct cdev cdev;
 } ipc_group_root_dev;
 
