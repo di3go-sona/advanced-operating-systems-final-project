@@ -11,8 +11,8 @@ typedef struct ipc_group_dev_t {
 	int delayed_msg_count;
 	int threads_count;
 	ktime_t delay;
-	struct mutex lock;
-	struct mutex delayed_lock;
+	spinlock_t lock;
+	spinlock_t delayed_lock;
 	struct wait_queue_head wait_queue;
 	int waiting_count;
 	int awaking_count;
@@ -21,7 +21,7 @@ typedef struct ipc_group_dev_t {
 } ipc_group_dev;
 
 typedef struct ipc_group_root_dev_t {
-	struct mutex lock;
+	spinlock_t lock;
 	struct cdev cdev;
 } ipc_group_root_dev;
 

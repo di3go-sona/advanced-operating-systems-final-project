@@ -23,7 +23,7 @@ long int ipc_group_root_ioctl(struct file *filp,
 	int res;
 	GR_DEBUG( "ioctl %d %ld", ioctl_num, ioctl_param);
 
-	mutex_lock(&(group_root_dev -> lock));
+	spin_lock(&(group_root_dev -> lock));
 
 	switch (ioctl_num)
 	{
@@ -40,7 +40,7 @@ long int ipc_group_root_ioctl(struct file *filp,
 		break;
 	}
 
-	mutex_unlock(&(group_root_dev -> lock));
+	spin_unlock(&(group_root_dev -> lock));
 	return res;
 }
 
@@ -49,6 +49,7 @@ int ipc_group_root_release(struct inode *inode, struct file *filp)
     GR_DEBUG( "root ipc dev release");
 	return SUCCESS;
 }
+
 
 struct file_operations ipc_group_root_ops = {
 	.open = ipc_group_root_open,
@@ -94,7 +95,7 @@ int ipc_group_root_install(void)
 	
 	/*  Initializing device values */
 	cdev_init(&(group_root_dev -> cdev) , &ipc_group_root_ops);
-	mutex_init(&(group_root_dev->lock));
+	spin_lock_init(&(group_root_dev->lock));
 	group_root_dev -> cdev.owner = THIS_MODULE;
 
 	/*  Registering device to the kernel */
@@ -199,8 +200,8 @@ int ipc_group_install(group_t groupno)
 
 	/*  Registering device to the kernel */
 	cdev_init(&(group_dev->cdev), &ipc_group_ops);
-	mutex_init(&(group_dev->lock));
-	mutex_init(&(group_dev->delayed_lock));
+	spin_lock_init(&(group_dev->lock));
+	spin_lock_init(&(group_dev->delayed_lock));
 	group_dev -> cdev.owner = THIS_MODULE;
 	group_dev -> msg_count = 0;
 	group_dev -> delay = ktime_set(0,0);

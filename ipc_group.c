@@ -32,17 +32,17 @@ module_param(max_storage_size, int, 0660);
 static int _publish_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	DEBUG("publishing delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
-	mutex_lock( &(group_dev ->delayed_lock));
+	spin_lock( &(group_dev ->delayed_lock));
 	(group_dev -> delayed_msg_count )-- ;
 	__list_del_entry(&(msg->next));
-	mutex_unlock( &(group_dev ->delayed_lock));
+	spin_unlock( &(group_dev ->delayed_lock));
 	// DEBUG("dequeued delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
 
-	mutex_lock( &(group_dev ->lock));
+	spin_lock( &(group_dev ->lock));
 	(group_dev -> msg_count )++ ;
 	list_add_tail (	&(msg -> next), &(group_dev -> msg_list));
-	mutex_unlock( &(group_dev ->lock));
+	spin_unlock( &(group_dev ->lock));
 	// DEBUG("published delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
 	return SUCCESS;
@@ -57,7 +57,7 @@ static int _revoke_delayed_messages(ipc_group_dev* group_dev){
 
 	INIT_LIST_HEAD(&tmp_list);
 
-	mutex_lock( &(group_dev ->delayed_lock));
+	spin_lock( &(group_dev ->delayed_lock));
 
 	tmp_count = group_dev -> delayed_msg_count;
 	if (tmp_count == 0 ) {
@@ -68,7 +68,7 @@ static int _revoke_delayed_messages(ipc_group_dev* group_dev){
 		list_splice_init(  &(group_dev -> delayed_msg_list), &tmp_list );
 	};
 
-	mutex_unlock( &(group_dev ->delayed_lock));
+	spin_unlock( &(group_dev ->delayed_lock));
 
 	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
 		hrtimer_cancel(&(tmp_msg->timer));
@@ -94,7 +94,7 @@ static int _flush_delayed_messages(ipc_group_dev* group_dev){
 
 	INIT_LIST_HEAD(&tmp_list);
 
-	mutex_lock( &(group_dev ->delayed_lock));
+	spin_lock( &(group_dev ->delayed_lock));
 
 	tmp_count = group_dev -> delayed_msg_count;
 	if (tmp_count == 0 ) {
@@ -105,17 +105,17 @@ static int _flush_delayed_messages(ipc_group_dev* group_dev){
 		list_splice_init(  &(group_dev -> delayed_msg_list), &tmp_list );
 	};
 
-	mutex_unlock( &(group_dev ->delayed_lock));
+	spin_unlock( &(group_dev ->delayed_lock));
 
 
 	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
 		hrtimer_cancel(&(tmp_msg->timer));
 	}
 
-	mutex_lock( &(group_dev ->lock));
+	spin_lock( &(group_dev ->lock));
 	list_splice( &tmp_list,  &(group_dev -> msg_list) );
 	group_dev -> msg_count += tmp_count ;
-	mutex_unlock( &(group_dev ->lock));
+	spin_unlock( &(group_dev ->lock));
 
 	return SUCCESS;
 }
@@ -166,10 +166,10 @@ static enum hrtimer_restart _publish_delayed_message_handler(struct hrtimer *tim
 static int _enqueue_message(ipc_message* msg, ipc_group_dev* group_dev){
 	DEBUG("enqueuing msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
-	mutex_lock( &(group_dev ->lock));
+	spin_lock( &(group_dev ->lock));
 	(group_dev -> msg_count )++ ;
 	list_add_tail (	&(msg -> next), &(group_dev -> msg_list));
-	mutex_unlock( &(group_dev ->lock));
+	spin_unlock( &(group_dev ->lock));
 	return SUCCESS;
 }
 
@@ -179,14 +179,14 @@ static int _enqueue_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 	DEBUG("enqueuing delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
 
-	mutex_lock( &(group_dev ->delayed_lock));
+	spin_lock( &(group_dev ->delayed_lock));
 	hrtimer_init(timer,CLOCK_MONOTONIC,HRTIMER_MODE_REL);
 	timer -> function = _publish_delayed_message_handler;
 	hrtimer_start(timer,group_dev -> delay,HRTIMER_MODE_REL);
 
 	(group_dev -> delayed_msg_count )++ ;
 	list_add_tail (	&(msg -> next), &(group_dev -> delayed_msg_list));
-	mutex_unlock( &(group_dev ->delayed_lock));
+	spin_unlock( &(group_dev ->delayed_lock));
 
 	return SUCCESS;
 }
@@ -263,10 +263,10 @@ ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff
 	group_cdev = filp->f_inode->i_cdev;
 	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
 
-	mutex_lock( &(group_dev ->lock));
+	spin_lock( &(group_dev ->lock));
 	
 	if (group_dev -> msg_count == 0){
-		mutex_unlock( &(group_dev ->lock));
+		spin_unlock( &(group_dev ->lock));
 		DEBUG("no msg found");
 
 		return -NO_MESSAGES;
@@ -277,7 +277,7 @@ ssize_t ipc_group_read (struct file * filp, char __user * buf , size_t lrn, loff
 	(group_dev -> msg_count )-- ;
 
 	__list_del_entry(&(msg->next));
-	mutex_unlock( &(group_dev ->lock));
+	spin_unlock( &(group_dev ->lock));
 
 	to_copy = lrn > msg -> payload_len ? msg -> payload_len : lrn;
 
@@ -357,10 +357,10 @@ ssize_t ipc_group_write (struct file * filp, const char __user * buf , size_t lr
 		else if (copied ==0) break;
 	}
 
-	// mutex_lock( &(group_dev ->lock));
+	// spin_lock( &(group_dev ->lock));
 	// (group_dev -> msg_count )++ ;
 	// list_add_tail (	&(msg -> next), &(group_dev -> msg_list));
-	// mutex_unlock( &(group_dev ->lock));
+	// spin_unlock( &(group_dev ->lock));
 	if (group_dev -> delay == 0){
 		res = _enqueue_message(msg, group_dev);
 	} else {
