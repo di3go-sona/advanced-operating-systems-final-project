@@ -114,7 +114,8 @@ int ipc_group_root_install(void)
 	/*  Creating the device into the pseudo file system */
 	group_root_device = device_create(group_dev_class, NULL, devno, NULL, IPC_ROOT_DEV_NAME);
 	if (group_root_device < 0) {
-		printk(KERN_ERR  "Failed creating device\n");
+		GR_ERROR( "Failed creating device\n");
+		res = group_root_device;
 		goto DEVICE_CREATE_FAIL;
 	} else {
 		GR_DEBUG( "Device creation success");
@@ -148,12 +149,14 @@ int ipc_group_root_uninstall(void)
 	int i;
 	dev_t devno;
 
+
 	spin_lock(&(group_root_dev -> lock));
 	group_root_dev -> closing = true;
+	spin_unlock(&(group_root_dev -> lock));
+
 	for (i=1; i<= IPC_MAX_GROUPS; i++){
 		ipc_group_uninstall((group_t)i);
 	}
-	spin_unlock(&(group_root_dev -> lock));
 
 	
 	GR_DEBUG( "uninstalling");
@@ -217,9 +220,11 @@ int ipc_group_install(group_t groupno)
 	spin_lock_init(&(group_dev->delayed_lock));
 	group_dev -> cdev.owner = THIS_MODULE;
 	group_dev -> msg_count = 0;
+	group_dev -> delayed_msg_count = 0;
 	group_dev -> delay = ktime_set(0,0);
 	group_dev -> waiting_count = 0;
 	group_dev -> awaking_count = 0;
+	group_dev -> closing = false;
 	init_waitqueue_head( &(group_dev -> wait_queue));
 
 	INIT_LIST_HEAD(&( group_dev -> msg_list ));

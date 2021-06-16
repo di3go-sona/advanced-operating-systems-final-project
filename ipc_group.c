@@ -140,6 +140,18 @@ static int _sleep_on_barrier(ipc_group_dev* group_dev){
 	return SUCCESS;
 }
 
+static int _delete_messages(ipc_group_dev* group_dev){
+
+	ipc_message* tmp_msg, *_tmp_msg;
+
+	list_for_each_entry_safe(tmp_msg, _tmp_msg, &(group_dev ->msg_list), next){
+		kfree(tmp_msg -> payload);
+		kfree(tmp_msg);
+	}
+
+	return SUCCESS;
+}
+
 static int _awake_barrier(ipc_group_dev* group_dev){
 	int to_awake;
 	DEBUG("barrier: wake up issued");
@@ -402,12 +414,23 @@ int ipc_group_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+int ipc_group_flush (struct file *filp,  fl_owner_t id){
+	struct cdev *group_cdev;
+	ipc_group_dev *group_dev;
+
+	group_cdev = filp->f_inode->i_cdev;
+	group_dev = container_of(group_cdev, ipc_group_dev, cdev);
+
+	return _flush_delayed_messages(group_dev);
+}
+
 struct file_operations ipc_group_ops = {
 	.open = ipc_group_open,
 	.read = ipc_group_read,
 	.write = ipc_group_write,
 	.release = ipc_group_release,
-	.unlocked_ioctl = ipc_group_ioctl
+	.unlocked_ioctl = ipc_group_ioctl,
+	.flush = ipc_group_flush
 };
 
 
@@ -430,16 +453,16 @@ int ipc_group_uninstall(group_t groupno)
 		group_dev = group_devs[groupno];
 	}
 
-	(group_dev -> closing = true);
+	group_dev -> closing = true;
 	while (group_dev -> threads_count > 0 ){};
+
 	_revoke_delayed_messages( group_dev );
-
-
+	_delete_messages( group_dev );
 	device_destroy(group_dev_class, group_devno);
 	cdev_del(&(group_dev->cdev));
 	kfree(group_dev);
 
 	group_devs[groupno] = NULL;
 
-	return 0;
+	return SUCCESS;
 }
