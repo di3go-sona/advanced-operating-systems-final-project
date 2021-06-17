@@ -26,10 +26,13 @@ clean:
 	make -C $(LINUX_KERNEL_PATH) M=$(CURRENT_PATH) clean
 
 install:
+	sudo groupadd aosv_ipc
+	sudo adduser $(USER) aosv_ipc
 	cp $(CURRENT_PATH)/$(RULES_FILENAME) /etc/udev/rules.d/
 	sudo udevadm control --reload-rules && udevadm trigger
 
 uninstall:
+	sudo groupdel aosv_ipc
 	rm /etc/udev/rules.d/$(RULES_FILENAME)
 	sudo udevadm control --reload-rules && udevadm trigger
 
