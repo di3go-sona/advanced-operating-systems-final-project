@@ -122,13 +122,14 @@ static int _flush_delayed_messages(ipc_group_dev* group_dev){
 
 static int _sleep_on_barrier(ipc_group_dev* group_dev){
 	int pos;
+	int attempts=0;
 
 
 	
 	pos = __sync_add_and_fetch( &(group_dev -> waiting_count), 1);
 	DEBUG("barrier: sleeping pos %d", pos);
 
-	wait_event_interruptible(group_dev -> wait_queue, group_dev -> awaking_count > 0);
+	wait_event_interruptible(group_dev -> wait_queue, (attempts++ >0) && (group_dev -> awaking_count > 0)  );
 	
 	__sync_sub_and_fetch( &(group_dev -> awaking_count), 1);
 
@@ -156,12 +157,12 @@ static int _awake_barrier(ipc_group_dev* group_dev){
 	int to_awake;
 	DEBUG("barrier: wake up issued");
 
-	// group_dev -> awaking = true;
+
 	
 	to_awake = __sync_fetch_and_and( &(group_dev -> waiting_count), 0);
 	__sync_add_and_fetch( &(group_dev -> awaking_count), to_awake);
 	wake_up_nr(&(group_dev -> wait_queue), to_awake);
-	// group_dev -> awaking = false;
+
 	
 
 	return SUCCESS;
