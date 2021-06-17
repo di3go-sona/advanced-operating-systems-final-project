@@ -52,27 +52,27 @@ static int _revoke_delayed_messages(ipc_group_dev* group_dev){
 
 	struct list_head tmp_list;
 	ipc_message* tmp_msg, *_tmp_msg;
-	int tmp_count;
+	int canceled;
 	int payload_len;
 
 	INIT_LIST_HEAD(&tmp_list);
 
-	spin_lock( &(group_dev ->delayed_lock));
-
-	tmp_count = group_dev -> delayed_msg_count;
-	if (tmp_count == 0 ) {
+	if (group_dev -> delayed_msg_count == 0 ) {
 		DEBUG("No message to revoke");
+		return SUCCESS;
 	} else {
-		group_dev -> delayed_msg_count = 0 ;
-		DEBUG("Revoking %d delayed messages ",tmp_count);
+		DEBUG("Revoking %d delayed messages ",group_dev -> delayed_msg_count);
 		list_splice_init(  &(group_dev -> delayed_msg_list), &tmp_list );
 	};
 
 	spin_unlock( &(group_dev ->delayed_lock));
 
+
+	canceled = 0;
 	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
-		hrtimer_cancel(&(tmp_msg->timer));
+		canceled += 1 - hrtimer_cancel(&(tmp_msg->timer));
 	}
+	__sync_sub_and_fetch(&(group_dev -> delayed_msg_count), canceled);
 
 	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
 		__list_del_entry(&(tmp_msg -> next) );
@@ -90,32 +90,35 @@ static int _flush_delayed_messages(ipc_group_dev* group_dev){
 
 	struct list_head tmp_list;
 	ipc_message* tmp_msg, *_tmp_msg;
-	int tmp_count;
+	int canceled;
 
 	INIT_LIST_HEAD(&tmp_list);
 
 	spin_lock( &(group_dev ->delayed_lock));
 
-	tmp_count = group_dev -> delayed_msg_count;
-	if (tmp_count == 0 ) {
+	if (group_dev -> delayed_msg_count == 0 ) {
 		DEBUG("No message to flush");
+		return SUCCESS;
 	} else {
-		group_dev -> delayed_msg_count = 0 ;
-		DEBUG("Flushing %d delayed messages ",tmp_count);
+		DEBUG("Flushing %d delayed messages ",group_dev -> delayed_msg_count);
 		list_splice_init(  &(group_dev -> delayed_msg_list), &tmp_list );
 	};
 
 	spin_unlock( &(group_dev ->delayed_lock));
 
 
+	canceled = 0;
 	list_for_each_entry_safe(tmp_msg, _tmp_msg, &tmp_list, next){
-		hrtimer_cancel(&(tmp_msg->timer));
+		canceled += 1 - hrtimer_cancel(&(tmp_msg->timer));
 	}
+	__sync_sub_and_fetch(&(group_dev -> delayed_msg_count), canceled);
+
 
 	spin_lock( &(group_dev ->lock));
 	list_splice( &tmp_list,  &(group_dev -> msg_list) );
-	group_dev -> msg_count += tmp_count ;
+	group_dev -> msg_count += canceled ;
 	spin_unlock( &(group_dev ->lock));
+
 
 	return SUCCESS;
 }
@@ -191,15 +194,16 @@ static int _enqueue_delayed_message(ipc_message* msg, ipc_group_dev* group_dev){
 
 	DEBUG("enqueuing delayed msg \"%.*s\" ", (int)msg->payload_len, msg-> payload);
 
-
-	spin_lock( &(group_dev ->delayed_lock));
 	hrtimer_init(timer,CLOCK_MONOTONIC,HRTIMER_MODE_REL);
 	timer -> function = _publish_delayed_message_handler;
-	hrtimer_start(timer,group_dev -> delay,HRTIMER_MODE_REL);
 
+	spin_lock( &(group_dev ->delayed_lock));
 	(group_dev -> delayed_msg_count )++ ;
 	list_add_tail (	&(msg -> next), &(group_dev -> delayed_msg_list));
+	hrtimer_start(timer,group_dev -> delay, HRTIMER_MODE_REL);
 	spin_unlock( &(group_dev ->delayed_lock));
+
+
 
 	return SUCCESS;
 }
