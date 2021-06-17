@@ -13,7 +13,7 @@
 
 
 
-#define DEBUG_ENABLED 
+// #define DEBUG_ENABLED 
 
 
 #ifdef DEBUG_ENABLED
@@ -23,6 +23,8 @@
 
 #else
 #define _DEBUG(...) do{ } while ( 0 )
+#define _ERR(...) do{ } while ( 0 )
+#define _WARN(...) do{ } while ( 0 )
 #endif
 
 
