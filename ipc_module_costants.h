@@ -7,6 +7,8 @@
 #define IPC_MAX_GROUPS              16
 #define IPC_MSG_SIZE                32
 #define IPC_DEV_NAMESIZE            32
+#define IPC_DEFAULT_MSG_SIZE        16
+#define IPC_DEFAULT_STORAGE_SIZE    4096
 
 #define IPC_ROOT_DEV_NAME           "aosv_ipc_root"
 #define IPC_CLASS_NAME              "aosv_ipc_class"
