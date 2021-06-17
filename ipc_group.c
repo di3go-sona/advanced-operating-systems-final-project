@@ -364,18 +364,15 @@ ssize_t ipc_group_write (struct file * filp, const char __user * buf , size_t lr
 	msg -> payload_len = lrn;
 	msg -> payload = payload_buf;
 	msg -> group_dev = group_dev;
+	
 	copied = 0; 
-
 	while( copied < lrn){
 		res = copy_from_user(payload_buf, buf, lrn-copied);
 		if (res >0) copied += res;
 		else if (copied ==0) break;
 	}
 
-	// spin_lock( &(group_dev ->lock));
-	// (group_dev -> msg_count )++ ;
-	// list_add_tail (	&(msg -> next), &(group_dev -> msg_list));
-	// spin_unlock( &(group_dev ->lock));
+
 	if (group_dev -> delay == 0){
 		res = _enqueue_message(msg, group_dev);
 	} else {
