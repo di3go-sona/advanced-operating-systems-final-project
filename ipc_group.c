@@ -14,8 +14,8 @@
 
 
 
-int max_message_size = 16;
-int max_storage_size = 4096;
+int max_message_size = IPC_DEFAULT_MSG_SIZE;
+int max_storage_size = IPC_DEFAULT_STORAGE_SIZE;
 int curr_storage_size = 0;
 
 struct class*  	group_dev_class ;
@@ -59,6 +59,7 @@ static int _revoke_delayed_messages(ipc_group_dev* group_dev){
 
 	if (group_dev -> delayed_msg_count == 0 ) {
 		DEBUG("No message to revoke");
+		spin_unlock( &(group_dev ->delayed_lock));
 		return SUCCESS;
 	} else {
 		DEBUG("Revoking %d delayed messages ",group_dev -> delayed_msg_count);
@@ -98,6 +99,7 @@ static int _flush_delayed_messages(ipc_group_dev* group_dev){
 
 	if (group_dev -> delayed_msg_count == 0 ) {
 		DEBUG("No message to flush");
+		spin_unlock( &(group_dev ->delayed_lock));
 		return SUCCESS;
 	} else {
 		DEBUG("Flushing %d delayed messages ",group_dev -> delayed_msg_count);

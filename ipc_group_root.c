@@ -115,7 +115,7 @@ int ipc_group_root_install(void)
 	group_root_device = device_create(group_dev_class, NULL, devno, NULL, IPC_ROOT_DEV_NAME);
 	if (group_root_device < 0) {
 		GR_ERROR( "Failed creating device\n");
-		res = group_root_device;
+		res = ( int ) group_root_device;
 		goto DEVICE_CREATE_FAIL;
 	} else {
 		GR_DEBUG( "Device creation success");
