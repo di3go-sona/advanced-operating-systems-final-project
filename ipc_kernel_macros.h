@@ -5,8 +5,8 @@
 #define _ERROR(...) do{  printk( KERN_ERR  "[ ERROR ]" __VA_ARGS__ );} while( 0 )
 
 #else
-#define DEBUG(...) do{ } while ( 0 )
-#define ERROR(...) do{ } while ( 0 )
+#define _DEBUG(...) do{ } while ( 0 )
+#define _ERROR(...) do{ } while ( 0 )
 #endif
 
 #define DEBUG(...) do{  _DEBUG( " " __VA_ARGS__ ) ;} while( 0 )

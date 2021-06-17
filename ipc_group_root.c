@@ -14,6 +14,7 @@
 
 
 int ipc_group_root_open(struct inode *inode, struct file *filp) {
+	if (group_root_dev -> closing) return -GROUP_CLOSING;
 	return SUCCESS;
 }
 
@@ -23,7 +24,7 @@ long int ipc_group_root_ioctl(struct file *filp,
 	int res;
 	GR_DEBUG( "ioctl %d %ld", ioctl_num, ioctl_param);
 
-	mutex_lock(&(group_root_dev -> lock));
+	spin_lock(&(group_root_dev -> lock));
 
 	switch (ioctl_num)
 	{
@@ -40,7 +41,7 @@ long int ipc_group_root_ioctl(struct file *filp,
 		break;
 	}
 
-	mutex_unlock(&(group_root_dev -> lock));
+	spin_unlock(&(group_root_dev -> lock));
 	return res;
 }
 
@@ -49,6 +50,7 @@ int ipc_group_root_release(struct inode *inode, struct file *filp)
     GR_DEBUG( "root ipc dev release");
 	return SUCCESS;
 }
+
 
 struct file_operations ipc_group_root_ops = {
 	.open = ipc_group_root_open,
@@ -94,8 +96,10 @@ int ipc_group_root_install(void)
 	
 	/*  Initializing device values */
 	cdev_init(&(group_root_dev -> cdev) , &ipc_group_root_ops);
-	mutex_init(&(group_root_dev->lock));
+	spin_lock_init(&(group_root_dev->lock));
 	group_root_dev -> cdev.owner = THIS_MODULE;
+	group_root_dev -> closing = false;
+
 
 	/*  Registering device to the kernel */
 	res = cdev_add(&(group_root_dev -> cdev) ,devno , 1);
@@ -110,7 +114,8 @@ int ipc_group_root_install(void)
 	/*  Creating the device into the pseudo file system */
 	group_root_device = device_create(group_dev_class, NULL, devno, NULL, IPC_ROOT_DEV_NAME);
 	if (group_root_device < 0) {
-		printk(KERN_ERR  "Failed creating device\n");
+		GR_ERROR( "Failed creating device\n");
+		res = ( int ) group_root_device;
 		goto DEVICE_CREATE_FAIL;
 	} else {
 		GR_DEBUG( "Device creation success");
@@ -141,7 +146,19 @@ ALLOC_CHRDEV_REGION_FAIL:
 
 int ipc_group_root_uninstall(void)
 {
+	int i;
 	dev_t devno;
+
+
+	spin_lock(&(group_root_dev -> lock));
+	group_root_dev -> closing = true;
+	spin_unlock(&(group_root_dev -> lock));
+
+	for (i=1; i<= IPC_MAX_GROUPS; i++){
+		ipc_group_uninstall((group_t)i);
+	}
+
+	
 	GR_DEBUG( "uninstalling");
 	devno = MKDEV(group_major, 0);
 	GR_DEBUG( "device_destroy");
@@ -199,13 +216,15 @@ int ipc_group_install(group_t groupno)
 
 	/*  Registering device to the kernel */
 	cdev_init(&(group_dev->cdev), &ipc_group_ops);
-	mutex_init(&(group_dev->lock));
-	mutex_init(&(group_dev->delayed_lock));
+	spin_lock_init(&(group_dev->lock));
+	spin_lock_init(&(group_dev->delayed_lock));
 	group_dev -> cdev.owner = THIS_MODULE;
 	group_dev -> msg_count = 0;
+	group_dev -> delayed_msg_count = 0;
 	group_dev -> delay = ktime_set(0,0);
 	group_dev -> waiting_count = 0;
 	group_dev -> awaking_count = 0;
+	group_dev -> closing = false;
 	init_waitqueue_head( &(group_dev -> wait_queue));
 
 	INIT_LIST_HEAD(&( group_dev -> msg_list ));
