@@ -1,11 +1,7 @@
-<h1 style="text-align: center; border: 0;">AOSV - Final Project Documentation
-<h1 style="text-align: center;">AY 2019/2020</h1>
 
-<h6 style="text-align: center;">Diego Sonaglia - 1754933</h6>
-
-<h6 style="text-align: center;">sonaglia.1754933@studenti.uniroma1.it</h6>
 
 #### Introduction
+An interprocess communication module for Linux Kernel developed as Final project for the Advanced Operating Systems and Virtualisation course @ La Sapienza
 
 This inter-process messaging and synchronization subsystem is implemented as a kernel loadable module that manages two kind of devices: group root and group.
 
